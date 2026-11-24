@@ -3,7 +3,7 @@
  * Soporte Offline Total para Web, Escritorio (Windows/Mac/Linux) y Móvil (Android/iOS)
  */
 
-const CACHE_VERSION = 'geophoto-v2.0.0';
+const CACHE_VERSION = 'geophoto-v2.1.0';
 const STATIC_CACHE = `geophoto-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `geophoto-runtime-${CACHE_VERSION}`;
 

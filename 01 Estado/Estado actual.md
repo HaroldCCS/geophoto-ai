@@ -1,43 +1,48 @@
 ---
 tipo: estado
-fecha_revision: 2026-11-23
-commit_base: 5f8cdd4
+actualizado: 2026-11-23
+version_app: 2.0
 ---
 
-# Estado actual del proyecto (revisión 23-nov-2026)
+# Estado actual del proyecto
 
-Revisión hecha leyendo `app.js` (6.038 líneas), `index.html`, `sw.js` y abriendo la app en el navegador. **Conclusión corta:** la interfaz está muy avanzada y el motor que inyecta fotos en Word/Excel es real, pero **varios módulos que la documentación da por hechos estaban simulados**: la IA, la nube, la cámara y la gestión de proyectos.
+> [!success] Resumen
+> Hay una **versión funcional** del prototipo: proyectos múltiples, IA real que lee las fotos, mesa de ajuste completa, versiones de informe y conexión con Google Drive y Sheets con trabajo offline. 16/16 pruebas automáticas pasan. Lo que falta está en [[Brechas]].
 
-## Inventario por módulo
+## Inventario por módulo (después de la iteración 1)
 
 | Módulo | Estado | Detalle |
 |---|---|---|
-| PWA (manifest, service worker, instalable) | #estado/hecho | `sw.js` precachea la app y las librerías locales. |
-| Persistencia offline (IndexedDB) | #estado/hecho | `OfflineStore` guarda config, fotos (dataURL), plantilla y su binario. **Un solo proyecto**: no hay separación por proyecto. |
-| Cámara en vivo | #estado/simulado | Abre `getUserMedia`, pero `takePhoto()` **no captura el video**: guarda una foto aleatoria de Unsplash. |
-| Estampado tipo TimeMark (fecha, GPS, CTM12, mini-mapa, logo) | #estado/parcial | El motor de dibujo existe y es completo, pero solo se aplica a fotos con `source === 'camera'` (que eran falsas). |
-| Importar desde galería | #estado/hecho | Guarda el archivo original intacto. **No lee EXIF.** |
-| Carga de plantillas .docx/.xlsx | #estado/hecho | Parser OpenXML real con JSZip: detecta tablas, celdas para fotos, logos protegidos y fotos preexistentes. |
-| "IA" de reconocimiento de plantillas | #estado/simulado | `simulateAiScanning()` es una barra de progreso con textos. La detección real es **heurística** (OpenXML), no hay modelo (YOLO/LayoutLM no existen en el código). |
-| Extracción de metadatos de fotos (núcleo académico) | #estado/falta | No hay OCR ni lectura EXIF. Es lo que exige el OE1 de la [[Propuesta academica]]. |
-| Inyección en Word / Excel y paginación | #estado/hecho | `injectPhotosIntoUserDocx` / `injectPhotosIntoUserXlsx`: clona páginas, respeta logos, tamaño uniforme (lienzo 1600×1200 al editar). |
-| Exportación PDF | #estado/falta | Aparece en la documentación y en regex de nombres, pero no hay generador PDF. |
-| Mesa: arrastrar y soltar, páginas P1/P2, mover a página | #estado/hecho | |
-| Mesa: ajuste (zoom, paneo, ±90°, ajustar/llenar, restablecer, guardar) | #estado/parcial | Faltan rotación libre, 180° directo, espejo, cuadrícula conmutable, bloqueo de proporciones, tamaño mín./máx. |
-| Mesa: selección múltiple | #estado/parcial | Se pueden marcar fotos pero **no hay acción** (ni retirar ni mover en bloque). |
-| Gestión de proyectos (RF-01) | #estado/falta | Proyecto fijo en código (`PRJ-2026-001 Obra Subestación Sur`). Sin estado, usuario, fechas ni lista. |
-| Versionado de informes | #estado/falta | |
-| Google Drive / Sheets | #estado/simulado | `processSyncQueue()` solo muestra un aviso "subido". La UI de Drive fue retirada. No hay OAuth ni llamadas a APIs. |
-| Cola de sincronización offline | #estado/simulado | `state.syncQueue` vive en memoria, no se persiste y nunca se llena. |
-| Compartir (WhatsApp/Telegram/correo) | #estado/falta | Documentado, no implementado. |
-| Fotos demo | ⚠️ | Vienen de Unsplash: sin internet salen rotas (se ve en la mesa). |
+| PWA instalable y offline | #estado/hecho | Service worker *network-first* (antes servía código viejo tras actualizar). Precachea también la IA. |
+| Proyectos (RF-01, RQ-06) | #estado/hecho | Crear, abrir, editar, eliminar. ID `PRJ-AAAAMMDD-XXXX`, usuario, estado (Borrador / En proceso / Finalizado), fechas, rutas de Drive. Migra los datos de la versión anterior. |
+| Cámara en vivo | #estado/hecho | Ahora captura el cuadro real del video; los metadatos salen de los sensores. *No verificado en un teléfono físico.* |
+| Estampado tipo TimeMark | #estado/hecho | Sin cambios; se aplica a fotos tomadas con la cámara de la app. |
+| Importar desde galería | #estado/hecho | Guarda el nombre de archivo y lanza la extracción con IA. |
+| **IA: extracción de metadatos (OE1/OE2)** | #estado/hecho | EXIF + OCR del sello (Tesseract.js local) → fecha, coordenadas, vía, municipio y departamento, con confianza y verificación cruzada. Precisión medida en [[Evaluacion IA]]. |
+| Pies de foto automáticos | #estado/parcial | Descripción y coordenadas se llenan solas; el Excel usa la fecha real de captura. La plantilla Word no tiene celdas de pie de foto: allí solo van las imágenes. |
+| Plantillas .docx/.xlsx | #estado/hecho | Heurística OpenXML (sin modelo entrenado; la animación "IA" de plantillas sigue siendo cosmética). |
+| Mesa: ajuste (RQ-08…16, RQ-22) | #estado/hecho | Zoom, rotación libre, 90/180/270, espejo H/V, cuadrícula, auto-ajuste, llenar, bloqueo de proporciones, tamaño mín./máx., restablecer, guardar, aplicar a la página. Vista previa = exportación. |
+| Tamaño uniforme (RQ-19) | #estado/hecho | Todas las fotos se exportan a 1600×1200 (desactivable). |
+| Selección múltiple (RQ-23) | #estado/hecho | Retirar (solo de la app) y mover a otra página. |
+| Versionado de informes (RQ-05) | #estado/hecho | 1.0 → 1.1 (ajustes) → 2.0 (cambian fotos o plantilla); historial con re-descarga. |
+| Google Drive + Sheets (RQ-01…04) | #estado/parcial | Implementado y probado contra una API simulada. **Falta probar con una cuenta real** (requiere Client ID). |
+| Cola offline (RQ-07) | #estado/hecho | Persistente en IndexedDB; se procesa al reconectar o al conectar la cuenta. |
+| Exportar PDF / compartir | #estado/falta | |
+| Paquete portable `.exe` | #estado/parcial | El script existe pero el paquete actual está desactualizado: regenerarlo en Windows. |
 
-## Pruebas existentes
-`proyecto/proyecto_ia/scripts/test_*.js`: pruebas en Node que cargan `app.js` con un DOM falso y verifican la inyección Excel/Word, la rotación y el encuadre. No hay `package.json`; se ejecutan con `node scripts/test_x.js`.
+## Errores corregidos en el código heredado
+- Exportar a Word **sin plantilla propia** (el caso por defecto) fallaba siempre con `triggerDownload is not defined`.
+- La cámara guardaba fotos aleatorias de Unsplash en lugar de capturar.
+- El servidor local enviaba los archivos con 1 h de caché y el service worker servía primero la caché: tras editar el código se veía la versión vieja.
+- La "sincronización" con la nube era solo un aviso en pantalla.
 
-## Riesgos detectados
-- `app.js` es un único archivo de 6.000 líneas con todo en `window.*`: cualquier cambio requiere cuidado.
-- Fotos guardadas como dataURL en IndexedDB: con muchas fotos de 3–5 MB el almacenamiento crece rápido (≈1,33× por base64).
-- La documentación de `proyecto_ia/docs` sobrevende el estado (habla de YOLOv8, FastAPI, OneDrive). Para la sustentación conviene alinearla con lo real.
+## Riesgos que siguen abiertos
+- Las fotos se guardan como dataURL en IndexedDB: con cientos de fotos de 2–5 MB el almacenamiento del navegador puede llenarse. Siguiente mejora: guardarlas como `Blob`.
+- El OCR depende de que el sello sea legible: sobre fondos claros (cielo, carretera iluminada) falla más. La fusión con EXIF compensa fecha y GPS, pero no el lugar.
+- El permiso `drive` completo sirve para el prototipo. Para producción: `drive.file` + Google Picker.
+- La documentación de `proyecto_ia/docs` todavía describe YOLO/LayoutLM/FastAPI como si existieran.
 
-Siguiente: [[Brechas]] · [[Plan de trabajo]]
+## Pruebas
+`npm test` en `proyecto/proyecto_ia` → 16/16. Detalle en [[Como ejecutar]].
+
+Ver también: [[Mapa del codigo]] · [[Plan de trabajo]] · [[2026-11-23]]

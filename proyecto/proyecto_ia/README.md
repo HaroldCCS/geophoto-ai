@@ -8,6 +8,17 @@
 
 ---
 
+> [!IMPORTANT]
+> **Estado real del prototipo (v2.0, 23-nov-2026).** Este README describe la visión completa. Lo implementado y verificado hoy es:
+> - **IA en el dispositivo:** extracción de fecha, coordenadas, vía, municipio y departamento de cada foto (EXIF + OCR del sello con Tesseract.js, sin internet), con confianza por campo. Evaluación reproducible con `npm run eval`.
+> - **Proyectos múltiples** con metadatos (ID, usuario, estado, fechas, rutas de Drive) y **versionado de informes** (1.0, 1.1, 2.0…).
+> - **Mesa de ajuste:** rotación libre y 90/180/270°, espejo, cuadrícula, auto-ajuste, bloqueo de proporciones, límites de tamaño y tamaño uniforme; retiro y movimiento en bloque.
+> - **Google Drive + Sheets** (requiere Client ID propio) con cola offline que sube todo al reconectar.
+> - Inyección en plantillas Word/Excel del usuario conservando logos (heurística OpenXML; **no** hay modelo YOLO/LayoutLM entrenado).
+>
+> No implementado aún: exportar a PDF, compartir por WhatsApp/correo, OneDrive/SharePoint, clasificación de escena.
+> La documentación de trabajo (estado, brechas, plan y bitácora) está en el vault de Obsidian, en la raíz del repositorio (`00 Inicio.md`).
+
 ## 📌 Resumen Ejecutivo del Proyecto
 
 En sectores como la ingeniería civil, auditorías técnicas, telecomunicaciones, minería, seguros, peritajes y supervisión de obras, la captura y consolidación de evidencias fotográficas en campo es una actividad crítica y altamente repetitiva. Actualmente, los profesionales enfrentan un flujo de trabajo manual y fragmentado:
