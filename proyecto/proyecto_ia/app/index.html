@@ -1,0 +1,1113 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>GeoPhoto Report AI - Sistema Inteligente de Registro Fotográfico</title>
+  
+  <!-- Metadatos y Manifiesto PWA -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#0f172a">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="GeoPhoto AI">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="application-name" content="GeoPhoto AI">
+  <link rel="icon" type="image/svg+xml" href="icons/icon.svg">
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+
+  <!-- Motor de Estilos Tailwind (100% Local y Offline) -->
+  <script src="lib/tailwind.js"></script>
+  <!-- Iconografía Phosphor (100% Local y Offline con fuentes WOFF2) -->
+  <link rel="stylesheet" href="lib/phosphor/style.css">
+  <!-- Leaflet para mini-mapa real (100% Local y Offline) -->
+  <link rel="stylesheet" href="lib/leaflet/leaflet.css">
+  <script src="lib/leaflet/leaflet.js"></script>
+  <link rel="stylesheet" href="styles.css">
+  <!-- Librerías locales para manipulación y generación 100% nativa de Word (.docx) y Excel (.xlsx) -->
+  <script src="lib/jszip.min.js"></script>
+  <script src="lib/docx.umd.js"></script>
+  <script src="lib/xlsx.full.min.js"></script>
+  <script>
+    if (typeof tailwind !== 'undefined') {
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            colors: {
+              brand: {
+                50: '#eff6ff',
+                500: '#2563eb',
+                600: '#1d4ed8',
+                700: '#1e40af',
+                900: '#0f172a'
+              }
+            }
+          }
+        }
+      };
+    }
+  </script>
+</head>
+<body class="bg-slate-950 text-slate-100 font-sans antialiased select-none h-screen w-screen overflow-hidden flex flex-col md:flex-row items-center justify-center">
+
+  <!-- Contenedor Maqueta Móvil / Escritorio -->
+  <div id="app-container" class="w-full h-full md:max-w-md md:h-[94vh] md:rounded-3xl bg-slate-900 border border-slate-800 shadow-2xl flex flex-col overflow-hidden relative transition-all duration-300">
+
+    <!-- Barra de Estado Superior -->
+    <header class="h-12 bg-slate-900/95 backdrop-blur border-b border-slate-800 px-3 flex items-center justify-between z-30 shrink-0">
+      <div class="flex items-center space-x-2">
+        <i class="ph-bold ph-aperture text-blue-500 text-xl"></i>
+        <span class="font-bold text-sm tracking-wide bg-gradient-to-r from-blue-400 to-indigo-300 bg-clip-text text-transparent">GeoPhoto AI</span>
+        <!-- Botón para alternar modo escritorio (pantalla ancha vs marco móvil) -->
+        <button id="btn-toggle-desktop-layout" onclick="toggleDesktopLayout()" class="hidden md:flex p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white text-xs items-center gap-1 cursor-pointer transition border border-slate-700" title="Alternar modo pantalla ancha / marco móvil">
+          <i id="btn-toggle-layout-icon" class="ph-bold ph-arrows-out-simple"></i>
+        </button>
+      </div>
+      
+      <!-- Estado de Red, Botón de Instalación PWA y Proyecto Activo -->
+      <div class="flex items-center space-x-2 text-xs">
+        <!-- Botón dinámico de instalación PWA -->
+        <button id="btn-install-pwa" onclick="triggerPwaInstallPrompt()" class="hidden px-2.5 py-1 rounded-full bg-blue-600 hover:bg-blue-500 text-white font-bold text-[11px] items-center gap-1 cursor-pointer shadow-md transition" title="Instalar GeoPhoto AI como aplicación en este dispositivo">
+          <i class="ph-bold ph-download-simple"></i>
+          <span>Instalar</span>
+        </button>
+
+        <button id="network-toggle-btn" class="flex items-center space-x-1 px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30" title="Haz clic para probar alternar Online / Offline">
+          <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" id="network-dot"></span>
+          <span id="network-status-text">Online</span>
+        </button>
+
+        <button onclick="switchView('view-templates')" id="current-project-pill" class="text-slate-300 hover:text-white font-mono text-[11px] truncate max-w-[120px] bg-slate-800 hover:bg-slate-700 px-2 py-0.5 rounded border border-slate-700 cursor-pointer flex items-center gap-1 active:scale-95 transition" title="Elegir o cambiar formato Word/Excel">
+          <i class="ph-bold ph-file-doc text-indigo-400"></i>
+          <span id="header-template-name">Formato: Word</span>
+        </button>
+        <span id="header-project-name" class="hidden">Subestación Sur</span>
+      </div>
+    </header>
+
+    <!-- Área de Vistas (Tabs) -->
+    <main class="flex-1 overflow-hidden relative">
+
+      <!-- ========================================== -->
+      <!-- VISTA 1: CÁMARA Y ESTAMPADO EN VIVO       -->
+      <!-- ========================================== -->
+      <section id="view-camera" class="view-panel active h-full flex flex-col relative bg-black">
+        
+        <!-- Visor de Cámara Real / Simulada -->
+        <div class="relative flex-1 w-full bg-black flex items-center justify-center overflow-hidden">
+          <video id="camera-stream" autoplay playsinline muted class="absolute inset-0 w-full h-full object-cover hidden"></video>
+          <img id="simulated-view" src="https://images.unsplash.com/photo-1541888946425-d0fbb1861564?auto=format&fit=crop&w=1080&q=80" class="absolute inset-0 w-full h-full object-cover" alt="Visor de Campo" />
+          
+          <!-- Controles Rápidos en el Visor -->
+          <div class="absolute top-3 left-3 right-3 flex justify-between items-center z-20">
+            <button id="btn-flash-toggle" class="w-9 h-9 rounded-full bg-black/50 backdrop-blur text-white flex items-center justify-center border border-white/20 active:scale-95">
+              <i class="ph-bold ph-lightning text-lg" id="icon-flash"></i>
+            </button>
+            <div class="bg-black/60 backdrop-blur px-2.5 py-1 rounded-full text-[11px] text-white/90 border border-white/20 flex items-center space-x-1.5">
+              <i class="ph-bold ph-crosshair text-emerald-400"></i>
+              <span id="gps-accuracy-tag">GPS: Precisión ±3m</span>
+            </div>
+            <button id="btn-open-config" class="w-9 h-9 rounded-full bg-black/50 backdrop-blur text-white flex items-center justify-center border border-white/20 active:scale-95">
+              <i class="ph-bold ph-sliders text-lg text-blue-400"></i>
+            </button>
+          </div>
+
+          <!-- Logo Flotante en Vivo (posiciones superiores e inferior-derecha) -->
+          <div id="live-logo-floating-box" class="absolute z-20 pointer-events-none transition-all hidden">
+            <div id="live-logo-floating-badge" class="p-1.5 rounded-lg bg-black/40 backdrop-blur-xs border border-white/20 flex items-center justify-center shadow-lg">
+              <img id="overlay-logo-floating" src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='44' viewBox='0 0 160 44'><rect width='160' height='44' rx='6' fill='%231e3a8a'/><rect x='2' y='2' width='156' height='40' rx='5' fill='%230f172a' stroke='%233b82f6' stroke-width='1.5'/><circle cx='24' cy='22' r='12' fill='%232563eb'/><path d='M24 13v18M15 22h18' stroke='%2393c5fd' stroke-width='2' stroke-linecap='round'/><circle cx='24' cy='22' r='4' fill='%23ffffff'/><text x='44' y='23' font-family='Arial,sans-serif' font-weight='900' font-size='12' fill='%23ffffff' letter-spacing='1'>GEOPHOTO</text><text x='44' y='34' font-family='Arial,sans-serif' font-weight='700' font-size='8' fill='%2360a5fa' letter-spacing='0.5'>INGENIERIA</text></svg>" class="object-contain" alt="Logo de Campo">
+            </div>
+          </div>
+
+          <!-- Capa de Estampado en Vivo (Watermark Overlay Agrupado) -->
+          <div id="live-watermark-overlay" class="absolute bottom-4 left-3 right-3 p-3 rounded-xl border border-white/20 transition-all z-20 shadow-2xl" style="background-color: rgba(0, 0, 0, 0.65);">
+            <div class="flex items-center space-x-2.5">
+              
+              <!-- Mini-Mapa Embebido con Renderizado Cartográfico Garantizado y Control Rápido de Zoom -->
+              <div id="overlay-minimap-box" class="w-16 h-16 rounded-lg overflow-hidden border border-white/30 shrink-0 relative bg-slate-900 shadow group">
+                <canvas id="overlay-minimap-canvas" width="128" height="128" class="w-full h-full object-cover block"></canvas>
+                <img id="overlay-map-img" class="w-full h-full object-cover absolute inset-0 hidden" alt="Mapa">
+                <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  <div class="w-2.5 h-2.5 bg-red-500 rounded-full border border-white shadow-md animate-pulse"></div>
+                </div>
+                <!-- Micro-barra de zoom en el mini-mapa -->
+                <div class="absolute bottom-0 inset-x-0 bg-black/75 backdrop-blur-xs flex items-center justify-between px-1 py-0.5 text-[9px] text-white select-none z-10">
+                  <button type="button" id="btn-overlay-zoom-out" class="hover:text-blue-300 font-bold px-0.5 leading-none cursor-pointer" title="Alejar mapa / menor detalle">-</button>
+                  <span id="overlay-zoom-tag" class="font-mono text-[8px] text-slate-200 leading-none">Z16</span>
+                  <button type="button" id="btn-overlay-zoom-in" class="hover:text-blue-300 font-bold px-0.5 leading-none cursor-pointer" title="Acercar mapa / mayor detalle">+</button>
+                </div>
+              </div>
+
+              <!-- Logo en cintillo a la izquierda (si se selecciona banner-left) -->
+              <div id="overlay-logo-banner-left" class="shrink-0 hidden">
+                <div class="p-1 rounded bg-black/30 border border-white/10 flex items-center justify-center">
+                  <img id="overlay-logo-left-img" src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='44' viewBox='0 0 160 44'><rect width='160' height='44' rx='6' fill='%231e3a8a'/><rect x='2' y='2' width='156' height='40' rx='5' fill='%230f172a' stroke='%233b82f6' stroke-width='1.5'/><circle cx='24' cy='22' r='12' fill='%232563eb'/><path d='M24 13v18M15 22h18' stroke='%2393c5fd' stroke-width='2' stroke-linecap='round'/><circle cx='24' cy='22' r='4' fill='%23ffffff'/><text x='44' y='23' font-family='Arial,sans-serif' font-weight='900' font-size='12' fill='%23ffffff' letter-spacing='1'>GEOPHOTO</text><text x='44' y='34' font-family='Arial,sans-serif' font-weight='700' font-size='8' fill='%2360a5fa' letter-spacing='0.5'>INGENIERIA</text></svg>" class="object-contain rounded" alt="Logo">
+                </div>
+              </div>
+
+              <!-- Metadatos de Estampado Agrupados (Color Unificado por Defecto Blanco) -->
+              <div id="overlay-metadata-wrapper" class="flex-1 min-w-0 text-[11px] leading-tight text-white space-y-1 transition-all">
+                <div class="flex items-center justify-between">
+                  <span id="overlay-project" class="font-bold uppercase tracking-wider text-[10px] truncate block">OBRA SUBESTACIÓN SUR - CT24</span>
+                </div>
+                <!-- Identificación de Municipio y Departamento -->
+                <div id="overlay-location-box" class="flex items-center gap-1 font-semibold text-[10px] truncate">
+                  <i id="overlay-location-icon" class="ph-bold ph-map-pin"></i>
+                  <span id="overlay-location-text">Medellín, Antioquia</span>
+                </div>
+                <div id="overlay-datetime" class="font-mono truncate">FECHA: 09/10/2026 14:32:10</div>
+                <div id="overlay-coords" class="font-mono font-semibold truncate">CTM12: N 2.067.459 m, E 4.880.056 m</div>
+                <div id="overlay-note" class="italic truncate">"Fisura observada en zapata de torre"</div>
+              </div>
+
+              <!-- Logo en cintillo a la derecha (si se selecciona banner-right) -->
+              <div id="overlay-logo-banner-right" class="shrink-0 hidden">
+                <div class="p-1 rounded bg-black/30 border border-white/10 flex items-center justify-center">
+                  <img id="overlay-logo-right-img" src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='44' viewBox='0 0 160 44'><rect width='160' height='44' rx='6' fill='%231e3a8a'/><rect x='2' y='2' width='156' height='40' rx='5' fill='%230f172a' stroke='%233b82f6' stroke-width='1.5'/><circle cx='24' cy='22' r='12' fill='%232563eb'/><path d='M24 13v18M15 22h18' stroke='%2393c5fd' stroke-width='2' stroke-linecap='round'/><circle cx='24' cy='22' r='4' fill='%23ffffff'/><text x='44' y='23' font-family='Arial,sans-serif' font-weight='900' font-size='12' fill='%23ffffff' letter-spacing='1'>GEOPHOTO</text><text x='44' y='34' font-family='Arial,sans-serif' font-weight='700' font-size='8' fill='%2360a5fa' letter-spacing='0.5'>INGENIERIA</text></svg>" class="object-contain rounded" alt="Logo">
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Barra Inferior de Disparo -->
+        <div class="h-24 bg-slate-950 border-t border-slate-800 px-6 flex items-center justify-between z-20 shrink-0">
+          <!-- Galería / Importar -->
+          <label class="cursor-pointer flex flex-col items-center text-slate-400 hover:text-white transition">
+            <i class="ph-bold ph-image text-2xl"></i>
+            <span class="text-[10px] mt-0.5">Galería</span>
+            <input type="file" id="file-import-input" accept="image/*" multiple class="hidden">
+          </label>
+
+          <!-- Botón Disparador Principal -->
+          <button id="btn-shutter" class="w-16 h-16 rounded-full border-4 border-white bg-red-600 hover:bg-red-500 active:scale-95 transition-all shadow-lg flex items-center justify-center">
+            <div class="w-12 h-12 rounded-full border-2 border-white/60"></div>
+          </button>
+
+          <!-- Nota Rápida -->
+          <button id="btn-quick-note" class="flex flex-col items-center text-slate-400 hover:text-white transition">
+            <i class="ph-bold ph-note-pencil text-2xl"></i>
+            <span class="text-[10px] mt-0.5">Nota</span>
+          </button>
+        </div>
+
+        <!-- Modal Deslizable de Configuración de Estampado -->
+        <div id="config-drawer" class="absolute inset-x-0 bottom-0 top-10 bg-slate-900 border-t border-slate-700 rounded-t-2xl z-40 transform translate-y-full transition-transform duration-300 flex flex-col p-4 shadow-2xl">
+          <div class="w-10 h-1 bg-slate-700 rounded-full self-center mb-3"></div>
+          <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+            <h3 class="text-sm font-bold text-white flex items-center gap-1.5">
+              <i class="ph-bold ph-faders text-blue-400"></i> Configuración de Estampado
+            </h3>
+            <button id="btn-close-config" class="text-slate-400 hover:text-white p-1">
+              <i class="ph-bold ph-x text-lg"></i>
+            </button>
+          </div>
+
+          <div class="flex-1 overflow-y-auto space-y-4 py-3 pr-1 text-xs">
+            
+            <!-- Switch Maestro de Estampado -->
+            <div class="flex items-center justify-between p-2.5 rounded-lg bg-slate-800/80 border border-slate-700">
+              <div>
+                <p class="font-semibold text-white">Activar Estampado en Vivo</p>
+                <p class="text-[11px] text-slate-400">Si se apaga, toma la foto 100% limpia</p>
+              </div>
+              <input type="checkbox" id="cfg-master-toggle" checked class="w-5 h-5 accent-blue-600 rounded">
+            </div>
+
+            <!-- Formato de Fecha y Hora -->
+            <div class="space-y-1.5">
+              <div class="flex justify-between items-center">
+                <label class="font-semibold text-slate-300 flex items-center gap-1">
+                  <input type="checkbox" id="cfg-date-enable" checked class="accent-blue-500 mr-1"> Mostrar Fecha / Hora
+                </label>
+              </div>
+              <select id="cfg-date-format" class="w-full bg-slate-800 border border-slate-700 rounded px-2.5 py-1.5 text-slate-200">
+                <option value="DD/MM/YYYY_24H">DD/MM/AAAA 24H (09/10/2026 14:32:10)</option>
+                <option value="DD/MM/YYYY_12H">DD/MM/AAAA 12H (09/10/2026 02:32:10 PM)</option>
+                <option value="ISO_8601">ISO 8601 (2026-10-09 14:32:10)</option>
+                <option value="VERBAL">Verbal (09 de Octubre de 2026)</option>
+              </select>
+            </div>
+
+            <!-- Formato de Posición GPS -->
+            <div class="space-y-1.5">
+              <div class="flex justify-between items-center">
+                <label class="font-semibold text-slate-300 flex items-center gap-1">
+                  <input type="checkbox" id="cfg-gps-enable" checked class="accent-blue-500 mr-1"> Coordenadas de Ubicación
+                </label>
+              </div>
+              <select id="cfg-gps-format" class="w-full bg-slate-800 border border-slate-700 rounded px-2.5 py-1.5 text-slate-200">
+                <option value="CTM12" selected>CTM12 Coordenadas Planas Colombia (Origen Nacional - EPSG:9377)</option>
+                <option value="EPSG3116">MAGNA-SIRGAS Origen Bogotá (EPSG:3116)</option>
+                <option value="UTM">UTM Métrico (Zona 18N, E: 598432, N: 509214)</option>
+                <option value="DECIMAL">Grados Decimales (4.60971, -74.08175)</option>
+                <option value="DMS">Grados, Minutos, Segundos (04°36'35.0"N 74°04'54.3"W)</option>
+                <option value="DDM">Grados y Minutos Decimales (04°36.583'N 74°04.905'W)</option>
+                <option value="ADDRESS">Dirección Urbana (Nomenclatura)</option>
+              </select>
+            </div>
+
+            <!-- Ubicación Geográfica: Municipio y Departamento -->
+            <div class="p-2.5 rounded-lg bg-slate-800/80 border border-slate-700 space-y-2">
+              <div class="flex items-center justify-between">
+                <label class="font-semibold text-slate-300 flex items-center gap-1.5 text-xs">
+                  <input type="checkbox" id="cfg-location-enable" checked class="accent-blue-500 mr-1">
+                  <i class="ph-bold ph-map-pin text-rose-400"></i> Municipio y Departamento
+                </label>
+              </div>
+              <div class="grid grid-cols-2 gap-2 text-xs">
+                <div>
+                  <label class="text-[10px] text-slate-400 block mb-0.5">Departamento</label>
+                  <input type="text" id="cfg-department-input" value="Antioquia" placeholder="Ej. Antioquia" class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-slate-200">
+                </div>
+                <div>
+                  <label class="text-[10px] text-slate-400 block mb-0.5">Municipio / Ciudad</label>
+                  <input type="text" id="cfg-municipality-input" value="Medellín" placeholder="Ej. Medellín" class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-slate-200">
+                </div>
+              </div>
+            </div>
+
+            <!-- Control de Mini-Mapa (Escala / Zoom) -->
+            <div id="cfg-map-details-panel" class="p-2.5 rounded-lg bg-slate-800/80 border border-slate-700 space-y-2">
+              <div class="flex justify-between items-center text-xs">
+                <label class="font-semibold text-slate-300 flex items-center gap-1.5 cursor-pointer">
+                  <input type="checkbox" id="cfg-map-enable" checked class="accent-blue-500 mr-1 w-4 h-4 rounded">
+                  <i class="ph-bold ph-map-trifold text-blue-400"></i> Mini-Mapa (Escala / Zoom):
+                </label>
+                <span id="cfg-map-zoom-val" class="font-mono text-blue-400 font-bold">16</span>
+              </div>
+              <div class="flex items-center gap-2">
+                <button type="button" id="btn-map-zoom-out" class="w-7 h-7 rounded bg-slate-700 hover:bg-slate-600 text-white flex items-center justify-center font-bold text-sm cursor-pointer transition">-</button>
+                <input type="range" id="cfg-map-zoom-slider" min="12" max="19" value="16" class="flex-1 accent-blue-600">
+                <button type="button" id="btn-map-zoom-in" class="w-7 h-7 rounded bg-slate-700 hover:bg-slate-600 text-white flex items-center justify-center font-bold text-sm cursor-pointer transition">+</button>
+              </div>
+            </div>
+
+            <!-- Panel de Personalización y Carga de Logo -->
+            <div id="cfg-logo-details-panel" class="p-3 rounded-xl bg-slate-800/90 border border-blue-500/30 space-y-3 transition-all">
+              <div class="flex items-center justify-between">
+                <label class="font-bold text-white text-xs flex items-center gap-1.5 cursor-pointer">
+                  <input type="checkbox" id="cfg-logo-enable" checked class="accent-blue-500 mr-1 w-4 h-4 rounded">
+                  <i class="ph-bold ph-image text-blue-400 text-sm"></i>
+                  <span>Logo Empresa / Proyecto</span>
+                </label>
+                <div class="flex items-center gap-1.5">
+                  <span id="cfg-logo-status-badge" class="text-[10px] text-emerald-300 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/30 font-medium">Activo</span>
+                  <span class="text-[10px] text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded border border-blue-500/20 font-normal hidden sm:inline">Anti-solapamiento</span>
+                </div>
+              </div>
+
+              <!-- Controles y carga del logo (Persistente, nunca desaparece) -->
+              <div id="cfg-logo-controls" class="space-y-3 transition-opacity duration-200">
+                <!-- Vista previa de imagen y Botón de Cargar -->
+                <div class="flex items-center space-x-2.5 bg-slate-900/90 p-2.5 rounded-lg border border-slate-700">
+                  <div class="w-14 h-12 rounded bg-slate-800 border border-slate-600 flex items-center justify-center overflow-hidden shrink-0 p-1">
+                    <img id="cfg-logo-preview" src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='44' viewBox='0 0 160 44'><rect width='160' height='44' rx='6' fill='%231e3a8a'/><rect x='2' y='2' width='156' height='40' rx='5' fill='%230f172a' stroke='%233b82f6' stroke-width='1.5'/><circle cx='24' cy='22' r='12' fill='%232563eb'/><path d='M24 13v18M15 22h18' stroke='%2393c5fd' stroke-width='2' stroke-linecap='round'/><circle cx='24' cy='22' r='4' fill='%23ffffff'/><text x='44' y='23' font-family='Arial,sans-serif' font-weight='900' font-size='12' fill='%23ffffff' letter-spacing='1'>GEOPHOTO</text><text x='44' y='34' font-family='Arial,sans-serif' font-weight='700' font-size='8' fill='%2360a5fa' letter-spacing='0.5'>INGENIERIA</text></svg>" class="max-h-full max-w-full object-contain" alt="Logo Previa">
+                  </div>
+                  <div class="flex-1 space-y-1">
+                    <input type="file" id="cfg-logo-file-input" accept="image/*" class="hidden">
+                    <button type="button" id="btn-upload-logo" class="w-full py-1 px-2 bg-blue-600 hover:bg-blue-500 text-white rounded text-[11px] font-bold flex items-center justify-center gap-1.5 transition cursor-pointer shadow">
+                      <i class="ph-bold ph-upload-simple"></i> Cargar Imagen de Logo
+                    </button>
+                    <div class="flex justify-between items-center text-[10px] text-slate-400">
+                      <span id="cfg-logo-name-label" class="truncate max-w-[120px]">Logo predeterminado</span>
+                      <button type="button" id="btn-reset-logo" class="text-red-400 hover:text-red-300 underline cursor-pointer text-[10px]">Restablecer</button>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Selector de Ubicación / Posición del Logo -->
+                <div class="space-y-1">
+                  <label class="text-slate-300 font-semibold text-[11px] flex items-center justify-between">
+                    <span>Ubicación en la Fotografía:</span>
+                    <span class="text-emerald-400 text-[10px] font-normal" id="cfg-logo-pos-hint">✓ Sin sobreponerse a textos</span>
+                  </label>
+                  <select id="cfg-logo-position" class="w-full bg-slate-900 border border-slate-700 rounded px-2.5 py-1.5 text-slate-200 text-xs">
+                    <option value="top-right">Superior Derecha (Recomendada)</option>
+                    <option value="top-left">Superior Izquierda</option>
+                    <option value="top-center">Superior Centro</option>
+                    <option value="banner-right">Cintillo Inferior (Derecha)</option>
+                    <option value="banner-left">Cintillo Inferior (Izquierda)</option>
+                    <option value="bottom-right">Inferior Derecha (Flotante)</option>
+                  </select>
+                </div>
+
+                <!-- Ajuste de Tamaño (Slider) -->
+                <div class="space-y-1">
+                  <div class="flex justify-between text-slate-300 text-[11px]">
+                    <span>Tamaño del Logo:</span>
+                    <span id="cfg-logo-size-val" class="font-mono text-blue-400 font-bold">44 px</span>
+                  </div>
+                  <input type="range" id="cfg-logo-size" min="24" max="96" value="44" class="w-full accent-blue-600">
+                  <div class="flex justify-between text-[10px] text-slate-500 font-mono">
+                    <span>24 px</span>
+                    <span>44 px</span>
+                    <span>96 px</span>
+                  </div>
+                </div>
+
+                <!-- Ajuste de Transparencia / Opacidad (Slider) -->
+                <div class="space-y-1">
+                  <div class="flex justify-between text-slate-300 text-[11px]">
+                    <span>Transparencia / Opacidad:</span>
+                    <span id="cfg-logo-opacity-val" class="font-mono text-blue-400 font-bold">90%</span>
+                  </div>
+                  <input type="range" id="cfg-logo-opacity" min="10" max="100" value="90" class="w-full accent-blue-600">
+                  <div class="flex justify-between text-[10px] text-slate-500 font-mono">
+                    <span>10% (Tenue)</span>
+                    <span>50%</span>
+                    <span>100% (Sólido)</span>
+                  </div>
+                </div>
+
+                <div class="text-[10px] text-slate-400 bg-slate-900/60 p-2 rounded border border-slate-700/60 flex items-start gap-1.5">
+                  <i class="ph-bold ph-shield-check text-emerald-400 text-sm shrink-0 mt-0.5"></i>
+                  <span><strong>Protección de textos activa:</strong> Los metadatos de fecha, GPS y proyecto se auto-ajustan geométricamente para nunca chocar con el logo.</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Panel de Estilos de Texto, Color y Ubicación Agrupada -->
+            <div class="p-3 rounded-xl bg-slate-800/90 border border-indigo-500/30 space-y-3">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-1.5">
+                  <i class="ph-bold ph-text-aa text-indigo-400 text-sm"></i>
+                  <span class="font-bold text-white text-xs">Estilos de Texto y Rótulo</span>
+                </div>
+                <span class="text-[10px] text-indigo-300 bg-indigo-500/10 px-1.5 py-0.5 rounded border border-indigo-500/30 font-medium">Textos Agrupados</span>
+              </div>
+
+              <!-- Tipo de Letra (Fuente) -->
+              <div class="space-y-1">
+                <label class="text-slate-300 font-semibold text-[11px]">Tipo de Letra (Tipografía):</label>
+                <select id="cfg-font-family" class="w-full bg-slate-900 border border-slate-700 rounded px-2.5 py-1.5 text-slate-200 text-xs">
+                  <option value="sans-serif">Sans-Serif (Moderna / Inter / Arial - Limpia)</option>
+                  <option value="monospace">Monospace (Técnica / Consolas - Estilo GPS)</option>
+                  <option value="condensed">Condensada (Compacta de Ingeniería / DIN)</option>
+                  <option value="serif">Serif (Formal / Georgia - Estilo Informe)</option>
+                </select>
+              </div>
+
+              <!-- Tamaño de Letra y Color de Texto -->
+              <div class="grid grid-cols-2 gap-2">
+                <div class="space-y-1">
+                  <label class="text-slate-300 font-semibold text-[11px]">Tamaño de Letra:</label>
+                  <select id="cfg-font-size" class="w-full bg-slate-900 border border-slate-700 rounded px-2.5 py-1.5 text-slate-200 text-xs">
+                    <option value="small">Pequeño (Compacto)</option>
+                    <option value="normal" selected>Normal (Estándar)</option>
+                    <option value="large">Grande (Alta Legibilidad)</option>
+                  </select>
+                </div>
+                <div class="space-y-1">
+                  <label class="text-slate-300 font-semibold text-[11px]">Color de Texto:</label>
+                  <div class="flex items-center space-x-1.5">
+                    <select id="cfg-text-color-preset" class="flex-1 bg-slate-900 border border-slate-700 rounded px-2.5 py-1.5 text-slate-200 text-xs">
+                      <option value="#FFFFFF" selected>Blanco</option>
+                      <option value="#FACC15">Amarillo</option>
+                      <option value="#38BDF8">Cian</option>
+                      <option value="#4ADE80">Verde</option>
+                      <option value="#FB923C">Naranja</option>
+                      <option value="custom">Otro...</option>
+                    </select>
+                    <input type="color" id="cfg-text-color-picker" value="#FFFFFF" class="w-7 h-7 rounded border border-slate-700 bg-transparent cursor-pointer p-0 shrink-0" title="Elegir color personalizado">
+                  </div>
+                </div>
+              </div>
+
+              <!-- Opacidad del Texto (Slider) -->
+              <div class="space-y-1">
+                <div class="flex justify-between text-slate-300 text-[11px]">
+                  <span>Opacidad de Textos:</span>
+                  <span id="cfg-text-opacity-val" class="font-mono text-indigo-400 font-bold">100%</span>
+                </div>
+                <input type="range" id="cfg-text-opacity" min="30" max="100" value="100" class="w-full accent-indigo-500">
+                <div class="flex justify-between text-[10px] text-slate-500 font-mono">
+                  <span>30%</span>
+                  <span>70%</span>
+                  <span>100% (Sólido)</span>
+                </div>
+              </div>
+
+              <!-- Ubicación Agrupada dentro de la Fotografía -->
+              <div class="space-y-1">
+                <label class="text-slate-300 font-semibold text-[11px] flex items-center justify-between">
+                  <span>Ubicación Agrupada en la Fotografía:</span>
+                  <span class="text-indigo-400 text-[10px] font-normal">Bloque compacto</span>
+                </label>
+                <select id="cfg-watermark-position" class="w-full bg-slate-900 border border-slate-700 rounded px-2.5 py-1.5 text-slate-200 text-xs">
+                  <option value="bottom-full" selected>Inferior Completo (Cintillo Horizontal Extendido)</option>
+                  <option value="bottom-left">Inferior Izquierda (Tarjeta Agrupada Compacta)</option>
+                  <option value="bottom-right">Inferior Derecha (Tarjeta Agrupada Compacta)</option>
+                  <option value="top-left">Superior Izquierda (Tarjeta Agrupada Compacta)</option>
+                  <option value="top-right">Superior Derecha (Tarjeta Agrupada Compacta)</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Opacidad del Fondo del Rótulo -->
+            <div class="space-y-1">
+              <div class="flex justify-between text-slate-300">
+                <span>Opacidad de Fondo del Rótulo</span>
+                <span id="cfg-opacity-val" class="font-mono text-blue-400">65%</span>
+              </div>
+              <input type="range" id="cfg-opacity-slider" min="0" max="100" value="65" class="w-full accent-blue-600">
+            </div>
+
+            <!-- Nota de Campo Predeterminada -->
+            <div class="space-y-1">
+              <label class="text-slate-300 font-semibold">Nota o Descripción Activa</label>
+              <input type="text" id="cfg-note-input" value="Fisura observada en zapata de torre" class="w-full bg-slate-800 border border-slate-700 rounded px-2.5 py-1.5 text-slate-200">
+            </div>
+
+          </div>
+
+          <button id="btn-save-config" class="w-full py-2.5 bg-blue-600 hover:bg-blue-500 font-bold rounded-lg text-white mt-2 transition">
+            Aplicar Parámetros
+          </button>
+        </div>
+
+      </section>
+
+      <!-- ========================================== -->
+      <!-- VISTA 2: PLANTILLAS Y RECONOCIMIENTO CON IA-->
+      <!-- ========================================== -->
+      <section id="view-templates" class="view-panel h-full flex flex-col p-4 bg-slate-900 overflow-y-auto space-y-4">
+        <div>
+          <h2 class="text-base font-bold text-white flex items-center gap-1.5">
+            <i class="ph-bold ph-file-doc text-indigo-400"></i> Formatos y Detección con IA
+          </h2>
+          <p class="text-xs text-slate-400">Sube el formato oficial de tu empresa en Word (.docx) o Excel (.xlsx).</p>
+        </div>
+
+        <!-- Input de archivo nativo oculto pero accesible -->
+        <input type="file" id="template-file-input" accept=".docx,.xlsx,.doc,.xls,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" style="display: none;">
+
+        <!-- Botón Principal Prominente para Abrir el Explorador de Archivos de Windows -->
+        <div id="dropzone-template" onclick="triggerTemplateFileInput()" class="border-2 border-dashed border-indigo-500/70 hover:border-indigo-400 rounded-xl p-5 flex flex-col items-center justify-center bg-slate-800/60 hover:bg-slate-800 text-center cursor-pointer transition select-none group shadow-lg">
+          <div class="w-14 h-14 rounded-full bg-indigo-500/20 text-indigo-400 flex items-center justify-center mb-2 group-hover:scale-110 transition shadow">
+            <i class="ph-bold ph-folder-open text-3xl"></i>
+          </div>
+          <p class="text-sm font-bold text-white">Examinar Formato en este Equipo</p>
+          <p class="text-[11px] text-slate-400 mt-1 max-w-xs">Haz clic aquí para abrir tus carpetas y elegir tu archivo <strong>Word (.docx, .doc)</strong> o <strong>Excel (.xlsx, .xls)</strong>.</p>
+          
+          <button type="button" onclick="event.stopPropagation(); triggerTemplateFileInput()" class="mt-3 px-5 py-2.5 bg-blue-600 hover:bg-blue-500 active:scale-95 text-white rounded-lg text-xs font-bold inline-flex items-center gap-2 shadow-lg cursor-pointer transition">
+            <i class="ph-bold ph-file-arrow-up text-base"></i>
+            <span>Abrir y Buscar Archivo en mi PC...</span>
+          </button>
+        </div>
+
+        <!-- Selector Desplegable Rápido de Formatos -->
+        <div class="p-3 rounded-xl bg-slate-800/80 border border-slate-700 space-y-1.5">
+          <label for="select-preset-format" class="text-xs font-bold text-slate-300 flex items-center justify-between">
+            <span>O escoge de la lista de formatos:</span>
+            <span class="text-[10px] text-blue-400 font-normal">Acceso directo</span>
+          </label>
+          <select id="select-preset-format" onchange="handlePresetFormatChange(this.value)" class="w-full bg-slate-900 border border-slate-700 hover:border-slate-600 rounded-lg px-3 py-2 text-xs text-white cursor-pointer focus:outline-none focus:border-indigo-500">
+            <option value="">-- Elige un formato predefinido para probar --</option>
+            <option value="word-interventoria">📄 Formato Interventoría Obra (Word .docx - 4 fotos/página)</option>
+            <option value="excel-inspeccion">📊 Matriz de Inspección Civil (Excel .xlsx - 6 fotos/página)</option>
+            <option value="word-ambiental">📄 Reporte de Gestión Ambiental (Word .docx - 2 fotos/página)</option>
+            <option value="excel-electrico">📊 Ficha Técnica Redes y Postes (Excel .xlsx - 4 fotos/página)</option>
+          </select>
+        </div>
+
+        <!-- Indicador de Archivo Seleccionado y Progreso de IA -->
+        <div id="template-file-status" class="hidden p-3 rounded-lg bg-blue-950/40 border border-blue-500/30 text-xs">
+          <div class="flex items-center justify-between mb-1.5">
+            <div class="flex items-center space-x-2">
+              <i class="ph-bold ph-file-doc text-blue-400 text-lg" id="status-file-icon"></i>
+              <span id="status-file-name" class="font-bold text-white truncate max-w-[200px]">archivo.docx</span>
+            </div>
+            <span id="status-file-size" class="text-[10px] text-slate-400 font-mono">1.2 MB</span>
+          </div>
+          <div class="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
+            <div id="ai-scan-progress-bar" class="bg-blue-500 h-1.5 rounded-full transition-all duration-500" style="width: 0%;"></div>
+          </div>
+          <p id="ai-scan-status-text" class="text-[10px] text-blue-300 mt-1 italic">Analizando documento con IA...</p>
+        </div>
+
+        <!-- Selector de Plantillas Demo Rápidas con Clic Directo -->
+        <div class="space-y-1.5">
+          <p class="text-[11px] font-bold uppercase tracking-wider text-slate-400">O haz clic en una plantilla de muestra:</p>
+          <div class="grid grid-cols-2 gap-2 text-xs">
+            <button type="button" onclick="simulateAiScanning('Formato_Interventoria_4Fotos.docx', 'word', '540 KB')" class="btn-demo-template p-2.5 rounded-lg bg-slate-800 border border-slate-700 hover:border-blue-500 text-left cursor-pointer transition active:scale-95" data-type="word-4" data-name="Formato_Interventoria_4Fotos.docx">
+              <p class="font-bold text-white flex items-center gap-1"><i class="ph-bold ph-file-doc text-blue-400"></i> Word (4 fotos/hoja)</p>
+              <p class="text-[10px] text-slate-400 mt-0.5">Membrete protegido + 2 fotos previas</p>
+            </button>
+            <button type="button" onclick="simulateAiScanning('Inspeccion_Obra_6Fotos.xlsx', 'excel', '320 KB')" class="btn-demo-template p-2.5 rounded-lg bg-slate-800 border border-slate-700 hover:border-blue-500 text-left cursor-pointer transition active:scale-95" data-type="excel-6" data-name="Inspeccion_Obra_6Fotos.xlsx">
+              <p class="font-bold text-white flex items-center gap-1"><i class="ph-bold ph-file-xls text-emerald-400"></i> Excel (6 fotos/hoja)</p>
+              <p class="text-[10px] text-slate-400 mt-0.5">Celdas combinadas + logo institucional</p>
+            </button>
+            <!-- Formato Oficial INVIAS (Celdas A18:T39, U18:AN39, A41:T62, U41:AN62) -->
+            <button type="button" onclick="simulateAiScanning('Formato_Registro_Fotografico_INVIAS.xlsx', 'invias', '106 KB')" class="btn-demo-template p-2.5 rounded-lg bg-slate-800/90 border border-emerald-500/40 hover:border-emerald-400 text-left cursor-pointer transition active:scale-95 col-span-2" data-type="excel-invias" data-name="Formato_Registro_Fotografico_INVIAS.xlsx">
+              <div class="flex items-center justify-between">
+                <p class="font-bold text-emerald-300 flex items-center gap-1.5">
+                  <i class="ph-bold ph-seal-check text-emerald-400 text-base"></i> Formato Oficial INVIAS (A18:T39, U18:AN39, A41:T62, U41:AN62)
+                </p>
+                <span class="text-[9px] bg-emerald-500/20 text-emerald-300 font-mono px-2 py-0.5 rounded font-bold">440 celdas c/u</span>
+              </div>
+              <p class="text-[10px] text-slate-400 mt-0.5">Cuadrícula oficial de 20 cols × 22 filas por foto para interventoría y seguimiento técnico vial</p>
+            </button>
+          </div>
+        </div>
+
+        <!-- Tarjeta de Diagnóstico de IA sobre la Plantilla -->
+        <div id="ai-template-card" class="hidden p-3.5 rounded-xl bg-slate-800/90 border border-indigo-500/30 space-y-3">
+          <div class="flex items-center justify-between pb-2 border-b border-slate-700">
+            <span class="text-xs font-bold text-indigo-300 flex items-center gap-1">
+              <i class="ph-bold ph-brain"></i> Análisis de Layout por IA (DLA)
+            </span>
+            <span class="text-[10px] bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded font-mono">Confianza: 96%</span>
+          </div>
+
+          <div class="grid grid-cols-2 gap-2 text-[11px]">
+            <div class="bg-slate-900/60 p-2 rounded">
+              <span class="text-slate-400 block text-[10px]">Capacidad Detectada:</span>
+              <strong id="ai-slots-detected" class="text-white text-xs">4 Fotos por Página</strong>
+            </div>
+            <div class="bg-slate-900/60 p-2 rounded">
+              <span class="text-slate-400 block text-[10px]">Logos Protegidos:</span>
+              <strong class="text-amber-400 text-xs">1 Logo Omitido (Header)</strong>
+            </div>
+            <div class="bg-slate-900/60 p-2 rounded col-span-2">
+              <span class="text-slate-400 block text-[10px]">Detección de Estado Previo:</span>
+              <strong id="ai-previous-photos" class="text-blue-400 text-xs">2 Fotos Previas detectadas (Continuar en Slot 3)</strong>
+            </div>
+            <div id="ai-multicell-section" class="bg-slate-900/60 p-2.5 rounded col-span-2 hidden">
+              <span class="text-slate-400 block text-[10px] flex items-center justify-between mb-1.5">
+                <span class="flex items-center gap-1 font-bold text-slate-300">
+                  <i class="ph-bold ph-table text-emerald-400"></i> Celdas Múltiples Asignadas (Validadas):
+                </span>
+                <span id="ai-multicell-count-badge" class="text-[9px] bg-emerald-500/20 text-emerald-300 px-1.5 py-0.5 rounded font-mono">0 slots</span>
+              </span>
+              <div id="ai-multicell-list" class="space-y-1 text-[10px] font-mono text-slate-300 max-h-28 overflow-y-auto pr-1">
+              </div>
+            </div>
+          </div>
+
+          <!-- Previsualización de Celdas Reconocidas -->
+          <div class="bg-slate-950 p-2.5 rounded border border-slate-800 text-center">
+            <p class="text-[11px] text-slate-400 mb-2">Esquema de Celdas Reconocido:</p>
+            <div class="grid grid-cols-2 gap-2 text-[11px] font-mono" id="ai-grid-preview">
+              <div class="p-2 rounded bg-amber-500/20 border border-amber-500/40 text-amber-300">
+                [Previa #1] Ocupada
+              </div>
+              <div class="p-2 rounded bg-amber-500/20 border border-amber-500/40 text-amber-300">
+                [Previa #2] Ocupada
+              </div>
+              <div class="p-2 rounded bg-emerald-500/20 border border-emerald-500/40 text-emerald-300">
+                [Slot #3] Disponible
+              </div>
+              <div class="p-2 rounded bg-emerald-500/20 border border-emerald-500/40 text-emerald-300">
+                [Slot #4] Disponible
+              </div>
+            </div>
+          </div>
+
+          <button id="btn-confirm-use-template" onclick="confirmUseTemplate()" class="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-lg text-xs transition cursor-pointer active:scale-98">
+            Usar este Formato en la Mesa de Trabajo
+          </button>
+        </div>
+
+      </section>
+
+      <!-- ========================================== -->
+      <!-- VISTA 3: MESA DE TRABAJO (DRAG & DROP)     -->
+      <!-- ========================================== -->
+      <section id="view-canvas" class="view-panel h-full flex flex-col bg-slate-900">
+        
+        <!-- Header de la Mesa de Trabajo -->
+        <div class="p-3 bg-slate-900 border-b border-slate-800 flex items-center justify-between shrink-0">
+          <div>
+            <h2 class="text-xs font-bold text-white flex items-center gap-1">
+              <i class="ph-bold ph-squares-four text-blue-400"></i> Mesa de Trabajo
+            </h2>
+            <p id="canvas-summary-subtitle" class="text-[10px] text-slate-400">8 Fotos cargadas | 2 Páginas</p>
+          </div>
+          <div class="flex items-center space-x-1.5">
+            <button id="btn-toggle-multi-select" class="px-2.5 py-1 rounded bg-slate-800 border border-slate-700 text-slate-300 text-[11px] hover:text-white">
+              <i class="ph-bold ph-check-square-offset"></i> Seleccionar
+            </button>
+            <button id="btn-add-more-photos" class="px-2.5 py-1 rounded bg-blue-600 text-white text-[11px] font-bold hover:bg-blue-500">
+              <i class="ph-bold ph-plus"></i> Añadir
+            </button>
+          </div>
+        </div>
+
+        <!-- Paginador de Hojas de Formato con Zona de Suelta (Drop Zone) -->
+        <div id="pagination-container-bar" class="px-3 py-1.5 bg-slate-950/95 border-b border-slate-800 flex items-center justify-between text-xs shrink-0 transition-all">
+          <div class="flex items-center space-x-1.5 overflow-x-auto py-0.5">
+            <span class="text-slate-400 text-[11px] font-semibold flex items-center gap-1 shrink-0" title="Páginas del formato">
+              <i class="ph-bold ph-files text-blue-400"></i>
+            </span>
+            <div id="pagination-pills" class="flex items-center space-x-1 shrink-0">
+              <!-- Botones P1, P2 generados dinámicamente -->
+            </div>
+          </div>
+          <span class="text-[10px] text-slate-400 bg-slate-900/80 border border-slate-800 px-2 py-0.5 rounded-full flex items-center gap-1 shrink-0">
+            <i class="ph-bold ph-arrows-down-up text-blue-400 text-xs"></i> <span>Mover a P1, P2...</span>
+          </span>
+        </div>
+
+        <!-- Lienzo de Fotos (Grid con Drag & Drop) -->
+        <div id="photos-grid-canvas" class="flex-1 overflow-y-auto p-3 grid grid-cols-2 gap-2.5 content-start">
+          <!-- Las tarjetas de fotos se inyectan dinámicamente con JavaScript -->
+        </div>
+
+        <!-- Barra Inferior de Información y Estado -->
+        <div class="p-2.5 bg-slate-950 border-t border-slate-800 flex items-center justify-between shrink-0">
+          <div class="text-[11px] text-slate-400 flex items-center gap-1.5">
+            <i class="ph-bold ph-hand-pointing text-blue-400"></i>
+            <span id="selected-count-label">Mantén presionado para mover</span>
+          </div>
+        </div>
+
+      </section>
+
+      <!-- ========================================== -->
+      <!-- VISTA 4: DESCARGA DIRECTA DEL REPORTE      -->
+      <!-- ========================================== -->
+      <section id="view-export" class="view-panel h-full flex flex-col p-4 bg-slate-900 overflow-y-auto space-y-4">
+        <div>
+          <h2 class="text-base font-bold text-white flex items-center gap-1.5">
+            <i class="ph-bold ph-download-simple text-blue-400"></i> Descarga Directa del Reporte
+          </h2>
+          <p class="text-xs text-slate-400">Descarga tu reporte técnico generado con alta fidelidad directamente a tu dispositivo.</p>
+        </div>
+
+        <!-- Tarjeta de Resumen / Estado -->
+        <div class="p-3.5 rounded-xl bg-slate-800/80 border border-slate-700 flex items-center justify-between">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-xl bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400 shrink-0">
+              <i class="ph-bold ph-file-text text-xl"></i>
+            </div>
+            <div>
+              <p class="text-xs font-bold text-white" id="direct-download-template-name">Plantilla: INVIAS / Formato Técnico</p>
+              <p class="text-[11px] text-slate-400" id="direct-download-summary">6 fotografías listas para descargar</p>
+            </div>
+          </div>
+          <span class="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full font-semibold">Listo</span>
+        </div>
+
+        <!-- Vista Previa de Evidencias con Rotaciones y Encuadres Aplicados -->
+        <div class="p-3.5 rounded-xl bg-slate-800/80 border border-slate-700 space-y-2.5">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-1.5">
+              <i class="ph-bold ph-images text-blue-400"></i>
+              <label class="text-xs font-semibold text-white block">Vista Previa de Evidencias Listas</label>
+            </div>
+            <span class="text-[10px] text-emerald-400 font-mono bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full flex items-center gap-1">
+              <i class="ph-bold ph-check-circle"></i> Rotaciones y Encuadres Guardados
+            </span>
+          </div>
+          <div id="direct-download-gallery-preview" class="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-56 overflow-y-auto p-1.5 bg-slate-950/70 rounded-lg border border-slate-800">
+            <!-- Inyectado dinámicamente con las fotos rotadas y encuadradas -->
+          </div>
+        </div>
+
+        <!-- Nomenclatura del Archivo -->
+        <div class="p-3.5 rounded-xl bg-slate-800/80 border border-slate-700 space-y-2.5">
+          <div class="flex items-center justify-between">
+            <label class="text-xs font-semibold text-white block">Nombre del Documento a Descargar</label>
+            <button type="button" onclick="openExportNameModal()" class="text-[11px] text-blue-400 hover:text-blue-300 font-semibold flex items-center gap-1 cursor-pointer">
+              <i class="ph-bold ph-pencil-simple"></i>
+              <span>Opciones</span>
+            </button>
+          </div>
+          <div class="flex items-center space-x-1.5">
+            <input type="text" id="export-filename-input" value="Formato_Interventoria_4Fotos_DILIGENCIADO.docx" class="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white font-mono focus:border-blue-500 outline-none transition">
+            <button id="btn-refresh-filename" title="Regenerar nombre por máscara" class="p-2 text-slate-400 hover:text-white bg-slate-900 rounded-lg border border-slate-700 cursor-pointer">
+              <i class="ph-bold ph-arrows-clockwise text-base"></i>
+            </button>
+            <button type="button" onclick="openExportNameModal()" title="Personalizar nombre y título del formato" class="p-2 text-blue-400 hover:text-white bg-blue-600/20 hover:bg-blue-600/30 rounded-lg border border-blue-500/30 cursor-pointer">
+              <i class="ph-bold ph-pencil-simple text-base"></i>
+            </button>
+          </div>
+          <div class="flex flex-wrap gap-1.5 pt-0.5">
+            <button type="button" onclick="appendMainFilenameTag('FECHA')" class="px-2 py-0.5 rounded bg-slate-900 hover:bg-slate-700 text-[10px] text-slate-300 border border-slate-700 cursor-pointer transition">+ Fecha</button>
+            <button type="button" onclick="appendMainFilenameTag('PROYECTO')" class="px-2 py-0.5 rounded bg-slate-900 hover:bg-slate-700 text-[10px] text-slate-300 border border-slate-700 cursor-pointer transition">+ Proyecto</button>
+            <button type="button" onclick="appendMainFilenameTag('DILIGENCIADO')" class="px-2 py-0.5 rounded bg-slate-900 hover:bg-slate-700 text-[10px] text-slate-300 border border-slate-700 cursor-pointer transition">+ Diligenciado</button>
+          </div>
+        </div>
+
+        <!-- Formatos de Salida (Bloqueado al Archivo Subido) -->
+        <div class="p-3.5 rounded-xl bg-slate-800/80 border border-slate-700 space-y-2.5">
+          <div class="flex items-center justify-between">
+            <label class="text-xs font-semibold text-slate-200 block">Formato de Salida</label>
+            <span class="text-[10px] text-emerald-400 font-mono bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full flex items-center gap-1">
+              <i class="ph-bold ph-lock-key"></i> Bloqueado 1:1 al archivo subido
+            </span>
+          </div>
+          <div id="export-format-container" class="grid grid-cols-1 gap-2 text-xs">
+            <button type="button" class="btn-export-format active p-3 rounded-xl bg-blue-600/20 border-2 border-blue-500 text-center font-bold text-blue-300 cursor-default transition" data-format="docx">
+              <i class="ph-bold ph-file-doc text-2xl block mx-auto mb-1 text-blue-400"></i>
+              <span class="block text-xs font-bold">Documento Técnico Word (.docx)</span>
+              <span class="block text-[10px] font-normal text-slate-400 font-mono">Formato de origen mantenido estrictamente</span>
+            </button>
+            <button type="button" class="btn-export-format hidden p-3 rounded-xl bg-emerald-600/20 border-2 border-emerald-500 text-center font-bold text-emerald-300 cursor-default transition" data-format="xlsx">
+              <i class="ph-bold ph-file-xls text-2xl block mx-auto mb-1 text-emerald-400"></i>
+              <span class="block text-xs font-bold">Hoja de Cálculo Excel (.xlsx)</span>
+              <span class="block text-[10px] font-normal text-slate-400 font-mono">Formato de origen mantenido estrictamente</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Botón de Descarga Directa Grande y Destacado -->
+        <button id="btn-download-local" onclick="handleDirectDownloadNow()" 
+          class="w-full py-3.5 px-4 bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 hover:from-blue-500 hover:to-indigo-500 text-white font-bold rounded-xl text-sm flex items-center justify-center gap-2.5 shadow-xl shadow-blue-900/40 transition cursor-pointer active:scale-95">
+          <i class="ph-bold ph-download-simple text-xl"></i>
+          <span>Descargar Reporte Directo</span>
+        </button>
+
+        <p class="text-[10px] text-center text-slate-400">
+          El archivo se descargará directamente en la carpeta de descargas de este dispositivo sin requerir cuentas de Google ni configuraciones externas.
+        </p>
+
+      </section>
+
+    </main>
+
+    <!-- Barra de Navegación Inferior (Tabs) -->
+    <nav class="h-14 bg-slate-950 border-t border-slate-800 flex items-center justify-around z-30 shrink-0">
+      <button class="nav-tab-btn active flex flex-col items-center justify-center text-blue-500 cursor-pointer" data-target="view-camera" onclick="switchView('view-camera')">
+        <i class="ph-bold ph-camera text-xl pointer-events-none"></i>
+        <span class="text-[10px] mt-0.5 font-medium pointer-events-none">Cámara</span>
+      </button>
+
+      <button class="nav-tab-btn flex flex-col items-center justify-center text-slate-400 hover:text-white cursor-pointer" data-target="view-templates" onclick="switchView('view-templates')">
+        <i class="ph-bold ph-file-doc text-xl pointer-events-none"></i>
+        <span class="text-[10px] mt-0.5 font-medium pointer-events-none">Formatos</span>
+      </button>
+
+      <button class="nav-tab-btn flex flex-col items-center justify-center text-slate-400 hover:text-white relative cursor-pointer" data-target="view-canvas" onclick="switchView('view-canvas')">
+        <i class="ph-bold ph-squares-four text-xl pointer-events-none"></i>
+        <span class="text-[10px] mt-0.5 font-medium pointer-events-none">Mesa</span>
+        <span id="canvas-badge-count" class="absolute top-1 right-3 w-4 h-4 bg-blue-600 text-white text-[9px] font-bold rounded-full flex items-center justify-center pointer-events-none">
+          6
+        </span>
+      </button>
+
+      <button class="nav-tab-btn flex flex-col items-center justify-center text-slate-400 hover:text-white cursor-pointer" data-target="view-export" onclick="switchView('view-export')">
+        <i class="ph-bold ph-download-simple text-xl pointer-events-none"></i>
+        <span class="text-[10px] mt-0.5 font-medium pointer-events-none">Descargar</span>
+      </button>
+    </nav>
+
+    <!-- Modal Rápido para Mover Foto a Otra Hoja -->
+    <div id="move-page-modal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 transition-all duration-200" onclick="closeMovePageModal()">
+      <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-xs w-full p-4 shadow-2xl space-y-3" onclick="event.stopPropagation()">
+        <div class="flex items-center justify-between pb-2 border-b border-slate-800">
+          <div class="flex items-center gap-1.5">
+            <i class="ph-bold ph-files text-blue-400 text-base"></i>
+            <h3 class="text-xs font-bold text-white">Mover Foto a Otra Hoja</h3>
+          </div>
+          <button onclick="closeMovePageModal()" class="w-7 h-7 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center text-xs cursor-pointer">
+            <i class="ph-bold ph-x"></i>
+          </button>
+        </div>
+        <p id="move-page-photo-title" class="text-[11px] text-slate-400 font-mono">Selecciona la hoja de destino:</p>
+        <div id="move-page-options" class="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto pt-1">
+          <!-- Opciones dinámicas de hojas -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal Lightbox para Vista Previa Ampliada (Doble Clic / Clic para regresar) -->
+    <div id="photo-lightbox-modal" class="hidden fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex flex-col items-center justify-center p-4 transition-all duration-200 select-none cursor-pointer" onclick="closePhotoLightbox()" title="Haz un clic para regresar a la mesa de trabajo">
+      <!-- Barra superior del Lightbox -->
+      <div class="absolute top-4 inset-x-4 flex items-center justify-between z-10 pointer-events-auto" onclick="event.stopPropagation()">
+        <div class="flex items-center space-x-2 bg-slate-900/90 px-3 py-1.5 rounded-full border border-slate-700/80 backdrop-blur shadow-lg">
+          <span id="lightbox-photo-title" class="text-xs font-bold text-white font-mono">Foto #1</span>
+          <span id="lightbox-photo-tag" class="text-[10px] px-2 py-0.5 rounded bg-blue-500/20 text-blue-300">Nueva</span>
+          <span id="lightbox-photo-rot" class="text-[10px] px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 font-mono hidden">0°</span>
+        </div>
+
+        <div class="flex items-center space-x-2">
+          <!-- Botón de Rotar rápido dentro del Lightbox -->
+          <button id="lightbox-btn-rotate" type="button" onclick="rotateFromLightbox()" class="px-3 py-1.5 rounded-full bg-slate-900/90 hover:bg-slate-800 border border-slate-700 text-amber-300 text-xs font-bold shadow-lg flex items-center gap-1 transition active:scale-95 cursor-pointer" title="Rotar 90°">
+            <i class="ph-bold ph-arrow-clockwise text-sm pointer-events-none"></i>
+            <span class="pointer-events-none">Rotar</span>
+          </button>
+          <!-- Botón de Ajustar tamaño dentro del Lightbox -->
+          <button id="lightbox-btn-crop" type="button" onclick="openCropFromLightbox()" class="px-3 py-1.5 rounded-full bg-slate-900/90 hover:bg-slate-800 border border-slate-700 text-blue-300 text-xs font-bold shadow-lg flex items-center gap-1 transition active:scale-95 cursor-pointer" title="Ajustar tamaño y encuadre">
+            <i class="ph-bold ph-crop text-sm pointer-events-none"></i>
+            <span class="pointer-events-none">Ajustar Tamaño</span>
+          </button>
+          <button id="lightbox-btn-close" onclick="closePhotoLightbox()" class="w-9 h-9 rounded-full bg-slate-900/90 hover:bg-slate-800 border border-slate-700 flex items-center justify-center text-white text-base shadow-xl transition active:scale-95 cursor-pointer" title="Cerrar vista previa (Clic o Escape)">
+            <i class="ph-bold ph-x"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- Contenedor Imagen Ampliada -->
+      <div class="max-w-4xl max-h-[80vh] w-full flex items-center justify-center overflow-hidden pointer-events-none">
+        <img id="lightbox-img" src="" alt="Vista Previa Ampliada" class="max-w-full max-h-[80vh] object-contain rounded-xl shadow-2xl transition-transform duration-200 border border-slate-800/80">
+      </div>
+
+      <!-- Pie del Lightbox -->
+      <div class="absolute bottom-4 inset-x-4 flex flex-col items-center justify-center pointer-events-none text-center">
+        <p id="lightbox-photo-note" class="text-xs text-slate-300 bg-slate-900/90 px-4 py-1.5 rounded-full border border-slate-700/80 max-w-lg truncate shadow-lg hidden"></p>
+        <p class="text-[11px] text-slate-400 mt-2 bg-slate-950/80 px-3 py-1 rounded-full border border-slate-800/80 shadow">
+          <i class="ph-bold ph-cursor-click text-blue-400"></i> Haz un clic en cualquier parte o pulsa Escape para regresar
+        </p>
+      </div>
+    </div>
+
+    <!-- Modal de Ajuste de Tamaño, Encuadre y Rotación -->
+    <div id="photo-crop-modal" class="hidden fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 select-none transition-all duration-200" onclick="closeCropModal()">
+      <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-sm w-full p-4 shadow-2xl space-y-3 flex flex-col" onclick="event.stopPropagation()">
+        
+        <!-- Header -->
+        <div class="flex items-center justify-between pb-2 border-b border-slate-800">
+          <div class="flex items-center gap-1.5">
+            <i class="ph-bold ph-crop text-blue-400 text-base"></i>
+            <div>
+              <h3 class="text-xs font-bold text-white">Ajustar Tamaño y Encuadre</h3>
+              <p id="crop-modal-photo-title" class="text-[10px] text-slate-400 font-mono">Foto #1</p>
+            </div>
+          </div>
+          <button onclick="closeCropModal()" class="w-7 h-7 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center text-xs cursor-pointer">
+            <i class="ph-bold ph-x"></i>
+          </button>
+        </div>
+
+        <!-- Marco de Simulación de Celda de Formato (4:3) -->
+        <div class="relative w-full aspect-[4/3] bg-slate-950 rounded-xl overflow-hidden border-2 border-dashed border-slate-700 flex items-center justify-center">
+          <div id="crop-preview-box" class="w-full h-full relative overflow-hidden flex items-center justify-center cursor-grab active:cursor-grabbing select-none touch-none" title="Arrastra para mover la zona encuadrada">
+            <img id="crop-preview-img" src="" alt="Encuadre" class="max-w-none transition-transform duration-75 origin-center pointer-events-none select-none">
+          </div>
+          <!-- Retícula guía transparente de encuadre técnico -->
+          <div class="absolute inset-0 pointer-events-none grid grid-cols-3 grid-rows-3 opacity-25">
+            <div class="border-r border-b border-white/30"></div>
+            <div class="border-r border-b border-white/30"></div>
+            <div class="border-b border-white/30"></div>
+            <div class="border-r border-b border-white/30"></div>
+            <div class="border-r border-b border-white/30"></div>
+            <div class="border-b border-white/30"></div>
+            <div class="border-r border-white/30"></div>
+            <div class="border-r border-white/30"></div>
+            <div></div>
+          </div>
+          <div class="absolute bottom-1 right-2 bg-black/70 px-1.5 py-0.5 rounded text-[9px] text-slate-300 font-mono pointer-events-none">
+            Encuadre de Celda
+          </div>
+        </div>
+
+        <!-- Guía de uso de encuadre -->
+        <div class="text-[10px] text-slate-400 text-center flex items-center justify-center gap-1">
+          <i class="ph-bold ph-hand-pointing text-blue-400"></i>
+          <span>Arrastra la foto o usa las flechas para encuadrar la zona de interés</span>
+        </div>
+
+        <!-- Indicador de Parámetros Actuales -->
+        <div class="flex items-center justify-between text-[11px] text-slate-300 px-1">
+          <span>Tamaño / Escala: <strong id="crop-zoom-label" class="text-blue-400 font-mono">100%</strong></span>
+          <span>Rotación: <strong id="crop-rot-label" class="text-amber-400 font-mono">0°</strong></span>
+        </div>
+
+        <!-- Controles de Rotación y Zoom -->
+        <div class="space-y-2.5 text-xs">
+          <!-- Control Deslizante de Zoom / Tamaño -->
+          <div class="flex items-center space-x-2">
+            <button type="button" onclick="adjustCropZoom(-15)" class="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-white flex items-center justify-center text-xs font-bold shrink-0 cursor-pointer active:scale-95 transition" title="Reducir zoom">
+              <i class="ph-bold ph-minus pointer-events-none"></i>
+            </button>
+            <input type="range" id="crop-zoom-slider" min="50" max="250" value="100" class="flex-1 accent-blue-600 h-2 cursor-pointer" oninput="onCropZoomChange(this.value)" onchange="onCropZoomChange(this.value)">
+            <button type="button" onclick="adjustCropZoom(15)" class="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-white flex items-center justify-center text-xs font-bold shrink-0 cursor-pointer active:scale-95 transition" title="Aumentar zoom">
+              <i class="ph-bold ph-plus pointer-events-none"></i>
+            </button>
+          </div>
+
+          <!-- Botones de Desplazamiento Fino / Encuadre de Zona -->
+          <div class="flex items-center justify-between bg-slate-800/80 px-2.5 py-2 rounded-xl border border-slate-700/60 text-xs">
+            <span class="text-[11px] text-slate-300 flex items-center gap-1 font-semibold">
+              <i class="ph-bold ph-arrows-out-cardinal text-blue-400"></i>
+              <span>Encuadrar:</span>
+            </span>
+            <div class="flex items-center gap-1.5">
+              <button type="button" onclick="panCrop(0.15, 0)" class="w-8 h-8 rounded-lg bg-slate-700 hover:bg-slate-600 text-white flex items-center justify-center font-bold text-sm cursor-pointer active:scale-95 transition shadow" title="Mover visor a la izquierda">←</button>
+              <button type="button" onclick="panCrop(0, 0.15)" class="w-8 h-8 rounded-lg bg-slate-700 hover:bg-slate-600 text-white flex items-center justify-center font-bold text-sm cursor-pointer active:scale-95 transition shadow" title="Mover visor arriba">↑</button>
+              <button type="button" onclick="panCrop(0, -0.15)" class="w-8 h-8 rounded-lg bg-slate-700 hover:bg-slate-600 text-white flex items-center justify-center font-bold text-sm cursor-pointer active:scale-95 transition shadow" title="Mover visor abajo">↓</button>
+              <button type="button" onclick="panCrop(-0.15, 0)" class="w-8 h-8 rounded-lg bg-slate-700 hover:bg-slate-600 text-white flex items-center justify-center font-bold text-sm cursor-pointer active:scale-95 transition shadow" title="Mover visor a la derecha">→</button>
+              <button type="button" onclick="centerCropPan()" class="px-2.5 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-[11px] font-semibold cursor-pointer active:scale-95 transition shadow" title="Centrar encuadre">Centrar</button>
+            </div>
+          </div>
+
+          <!-- Modos Rápidos y Rotación -->
+          <div class="grid grid-cols-4 gap-1.5 pt-0.5">
+            <button type="button" onclick="setCropFitMode('fit')" id="btn-crop-fit" class="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] font-semibold flex flex-col items-center gap-0.5 cursor-pointer active:scale-95 transition" title="Ajustar completa sin recortar">
+              <i class="ph-bold ph-arrows-in-simple text-sm text-blue-400 pointer-events-none"></i>
+              <span class="pointer-events-none">Ajustar</span>
+            </button>
+            <button type="button" onclick="setCropFitMode('cover')" id="btn-crop-cover" class="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] font-semibold flex flex-col items-center gap-0.5 cursor-pointer active:scale-95 transition" title="Llenar celda completa">
+              <i class="ph-bold ph-arrows-out-simple text-sm text-emerald-400 pointer-events-none"></i>
+              <span class="pointer-events-none">Llenar</span>
+            </button>
+            <button type="button" onclick="rotateCropModal(-90)" class="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] font-semibold flex flex-col items-center gap-0.5 cursor-pointer active:scale-95 transition" title="Rotar 90° a la izquierda">
+              <i class="ph-bold ph-arrow-counter-clockwise text-sm text-amber-400 pointer-events-none"></i>
+              <span class="pointer-events-none">-90°</span>
+            </button>
+            <button type="button" onclick="rotateCropModal(90)" class="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] font-semibold flex flex-col items-center gap-0.5 cursor-pointer active:scale-95 transition" title="Rotar 90° a la derecha">
+              <i class="ph-bold ph-arrow-clockwise text-sm text-amber-400 pointer-events-none"></i>
+              <span class="pointer-events-none">+90°</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Botones de Acción -->
+        <div class="grid grid-cols-2 gap-2 pt-2 border-t border-slate-800">
+          <button type="button" onclick="resetCropModal()" class="py-2.5 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold cursor-pointer active:scale-95 transition">
+            Restablecer
+          </button>
+          <button type="button" onclick="saveCropModal()" class="py-2.5 px-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold shadow-lg cursor-pointer active:scale-95 transition">
+            Guardar Ajuste
+          </button>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Modal para Cambiar Nombre del Formato al Exportar -->
+    <div id="export-name-modal" class="hidden fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 transition-all duration-200" onclick="closeExportNameModal()">
+      <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-sm w-full p-4 shadow-2xl space-y-4" onclick="event.stopPropagation()">
+        
+        <!-- Encabezado del Modal -->
+        <div class="flex items-center justify-between pb-2 border-b border-slate-800">
+          <div class="flex items-center gap-2">
+            <div class="w-8 h-8 rounded-lg bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400">
+              <i class="ph-bold ph-file-arrow-down text-lg"></i>
+            </div>
+            <div>
+              <h3 class="text-xs font-bold text-white">Exportar Formato</h3>
+              <p class="text-[10px] text-slate-400">Personaliza el nombre antes de descargar</p>
+            </div>
+          </div>
+          <button onclick="closeExportNameModal()" class="w-7 h-7 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center text-xs cursor-pointer">
+            <i class="ph-bold ph-x"></i>
+          </button>
+        </div>
+
+        <!-- Campo 1: Nombre del archivo a generar -->
+        <div class="space-y-1.5">
+          <label class="text-[11px] font-semibold text-slate-300 flex items-center justify-between">
+            <span>Nombre del Archivo / Formato:</span>
+            <span id="modal-export-ext-badge" class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-300 border border-blue-500/20">.docx</span>
+          </label>
+          <div class="relative">
+            <input type="text" id="modal-export-filename-input" 
+              class="w-full bg-slate-950 border border-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-lg px-3 py-2 text-xs text-white font-mono outline-none transition" 
+              placeholder="Nombre del documento">
+          </div>
+          <!-- Atajos rápidos para nombres -->
+          <div class="flex flex-wrap gap-1 pt-1">
+            <button type="button" onclick="appendFilenameTag('FECHA')" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-[10px] text-slate-300 border border-slate-700 cursor-pointer">+ Fecha Hoy</button>
+            <button type="button" onclick="appendFilenameTag('PROYECTO')" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-[10px] text-slate-300 border border-slate-700 cursor-pointer">+ Proyecto</button>
+            <button type="button" onclick="appendFilenameTag('DILIGENCIADO')" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-[10px] text-slate-300 border border-slate-700 cursor-pointer">+ Diligenciado</button>
+            <button type="button" onclick="resetDefaultFilename()" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-[10px] text-amber-300 border border-slate-700 cursor-pointer">Revertir</button>
+          </div>
+        </div>
+
+        <!-- Campo 2: Título o Nombre Institucional del Formato -->
+        <div class="space-y-1.5">
+          <label class="text-[11px] font-semibold text-slate-300 block">Título / Encabezado del Formato:</label>
+          <input type="text" id="modal-export-title-input" 
+            class="w-full bg-slate-950 border border-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-lg px-3 py-2 text-xs text-white outline-none transition" 
+            placeholder="Ej: REGISTRO FOTOGRÁFICO DE INSPECCIÓN">
+        </div>
+
+        <!-- Formato de Salida dentro del modal (Bloqueado) -->
+        <div class="space-y-1.5">
+          <div class="flex items-center justify-between">
+            <label class="text-[11px] font-semibold text-slate-300 block">Formato de Salida:</label>
+            <span class="text-[10px] text-emerald-400 font-mono flex items-center gap-1">
+              <i class="ph-bold ph-lock-key"></i> Bloqueado
+            </span>
+          </div>
+          <div class="grid grid-cols-1 gap-2">
+            <button type="button" id="modal-btn-format-docx" onclick="setModalExportFormat('docx')" 
+              class="py-2 px-3 rounded-lg border text-xs font-semibold flex items-center justify-center gap-1.5 cursor-default bg-blue-600/20 border-blue-500 text-blue-300">
+              <i class="ph-bold ph-file-doc text-base"></i>
+              <span>Word (.docx) - Formato de origen</span>
+            </button>
+            <button type="button" id="modal-btn-format-xlsx" onclick="setModalExportFormat('xlsx')" 
+              class="hidden py-2 px-3 rounded-lg border text-xs font-semibold flex items-center justify-center gap-1.5 cursor-default bg-emerald-600/20 border-emerald-500 text-emerald-300">
+              <i class="ph-bold ph-file-xls text-base"></i>
+              <span>Excel (.xlsx) - Formato de origen</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Botones de Acción -->
+        <div class="grid grid-cols-2 gap-2 pt-2 border-t border-slate-800">
+          <button type="button" onclick="closeExportNameModal()" class="py-2.5 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold cursor-pointer transition">
+            Cancelar
+          </button>
+          <button type="button" id="modal-btn-confirm-download" onclick="confirmAndDownloadFromModal()" class="py-2.5 px-3 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-bold shadow-lg flex items-center justify-center gap-1.5 cursor-pointer transition">
+            <i class="ph-bold ph-download-simple text-base"></i>
+            <span>Confirmar y Descargar</span>
+          </button>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Banner Flotante para Instalar PWA (Web, Desktop y Móvil) -->
+    <div id="pwa-install-banner" class="hidden absolute top-14 inset-x-3 z-40 bg-slate-900/95 backdrop-blur-md border border-blue-500/40 rounded-2xl p-3 shadow-2xl flex items-center justify-between text-xs transition-all duration-300">
+      <div class="flex items-center space-x-2.5">
+        <div class="w-9 h-9 rounded-xl bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400 shrink-0">
+          <i class="ph-bold ph-device-mobile text-xl"></i>
+        </div>
+        <div>
+          <p class="font-bold text-white text-[12px]">Instalar GeoPhoto AI</p>
+          <p class="text-[10px] text-slate-300">Funciona offline en escritorio, móvil o tablet</p>
+        </div>
+      </div>
+      <div class="flex items-center space-x-1.5 shrink-0">
+        <button onclick="dismissPwaBanner()" class="px-2 py-1 text-slate-400 hover:text-white text-[11px] cursor-pointer">
+          Cerrar
+        </button>
+        <button onclick="triggerPwaInstallPrompt()" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl text-[11px] shadow-lg cursor-pointer transition">
+          Instalar App
+        </button>
+      </div>
+    </div>
+
+    <!-- Modal de Instrucciones para iPhone / iPad Safari -->
+    <div id="pwa-ios-modal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 transition-all" onclick="closeIosInstallModal()">
+      <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-xs w-full p-4 shadow-2xl space-y-3" onclick="event.stopPropagation()">
+        <div class="flex items-center justify-between pb-2 border-b border-slate-800">
+          <h3 class="text-xs font-bold text-white flex items-center gap-1.5">
+            <i class="ph-bold ph-apple-logo text-slate-200"></i> Instalar en iPhone / iPad
+          </h3>
+          <button onclick="closeIosInstallModal()" class="w-6 h-6 rounded-full bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center text-xs cursor-pointer">
+            <i class="ph-bold ph-x"></i>
+          </button>
+        </div>
+        <p class="text-xs text-slate-300">Para instalar GeoPhoto AI desde Safari:</p>
+        <ol class="text-[11px] text-slate-300 space-y-2 list-decimal list-inside bg-slate-950 p-2.5 rounded-lg border border-slate-800">
+          <li>Toca el botón <strong>Compartir</strong> <i class="ph-bold ph-share-network text-blue-400"></i> en la barra de Safari.</li>
+          <li>Desplázate hacia abajo y selecciona <strong>"Agregar al Inicio"</strong>.</li>
+          <li>Presiona <strong>"Agregar"</strong> en la esquina superior derecha.</li>
+        </ol>
+        <button onclick="closeIosInstallModal()" class="w-full py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-lg cursor-pointer">
+          Entendido
+        </button>
+      </div>
+    </div>
+
+    <!-- Notificación Toast Flotante -->
+    <div id="toast-notify" class="absolute top-14 inset-x-4 bg-slate-800/95 border border-slate-700 text-white px-3.5 py-2.5 rounded-xl shadow-2xl flex items-center space-x-2.5 z-50 transform -translate-y-20 opacity-0 transition-all duration-300 pointer-events-none">
+      <i id="toast-icon" class="ph-bold ph-check-circle text-emerald-400 text-lg"></i>
+      <span id="toast-msg" class="text-xs">Operación realizada con éxito</span>
+    </div>
+
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

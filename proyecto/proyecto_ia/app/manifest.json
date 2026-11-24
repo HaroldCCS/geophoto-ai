@@ -1,0 +1,80 @@
+{
+  "id": "geophoto-report-ai-pwa",
+  "name": "GeoPhoto AI - Reportes Fotográficos",
+  "short_name": "GeoPhoto AI",
+  "description": "Sistema profesional para captura y generación autónoma de reportes fotográficos en plantillas Word (.docx) y Excel (.xlsx) con georreferenciación GPS e IA offline.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
+  "orientation": "any",
+  "background_color": "#020617",
+  "theme_color": "#0f172a",
+  "lang": "es-CO",
+  "dir": "ltr",
+  "categories": ["business", "productivity", "utilities"],
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-maskable-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Cámara de Inspección",
+      "short_name": "Cámara",
+      "description": "Captura evidencias fotográficas con estampado y GPS",
+      "url": "./index.html#view-camera",
+      "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Mesa de Trabajo",
+      "short_name": "Mesa",
+      "description": "Organiza fotos y páginas con Drag & Drop",
+      "url": "./index.html#view-canvas",
+      "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Formatos Word / Excel",
+      "short_name": "Formatos",
+      "description": "Carga y reconocimiento de plantillas con IA",
+      "url": "./index.html#view-templates",
+      "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Exportar Reporte",
+      "short_name": "Exportar",
+      "description": "Descarga y comparte documentos diligenciados",
+      "url": "./index.html#view-export",
+      "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }]
+    }
+  ],
+  "related_applications": [],
+  "prefer_related_applications": false
+}

@@ -1,0 +1,19 @@
+# Sistema
+.DS_Store
+Thumbs.db
+
+# Obsidian (estado local del editor)
+.obsidian/workspace*.json
+**/.obsidian/workspace*.json
+.trash/
+
+# Fotos de campo de muestra (≈750 MB, se quedan solo en local)
+proyecto/BUPA-*/
+
+# Binarios y paquetes generados (se regeneran con scripts/package_portable.ps1)
+proyecto/proyecto_ia/GeoPhotoAI_Portable/
+proyecto/proyecto_ia/GeoPhotoAI_Portable.zip
+proyecto/proyecto_ia/GeoPhotoAI.exe
+
+# Node
+node_modules/

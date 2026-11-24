@@ -1,0 +1,48 @@
+========================================================================
+                      GeoPhoto AI - Version Portable
+========================================================================
+
+¡Bienvenido a GeoPhoto AI!
+
+Esta carpeta contiene todo lo necesario para ejecutar GeoPhoto AI en 
+cualquier computador con Windows (Windows 10, Windows 11 o Windows Server)
+SIN necesidad de instalar Node.js, Python ni software de desarrollo adicional.
+Tampoco requiere conexión a internet (funciona 100% offline y local).
+
+------------------------------------------------------------------------
+¿COMO EJECUTAR EN OTRO PC?
+------------------------------------------------------------------------
+
+1. Copia toda esta carpeta (o el archivo GeoPhotoAI_Portable.zip) al otro PC
+   (por ejemplo en el Escritorio o Documentos). Si copiaste el ZIP, extráelo.
+
+2. Haz DOBLE CLIC en:
+   👉 GeoPhotoAI.exe
+
+3. La aplicación se abrirá automáticamente en una ventana de escritorio 
+   independiente (o en tu navegador web en http://127.0.0.1:8080/).
+
+4. Para cerrar la aplicación:
+   - Simplemente cierra la ventana de GeoPhoto AI.
+   - O haz clic derecho en el ícono de GeoPhoto AI en la barra de tareas 
+     (junto al reloj de Windows) y selecciona "Cerrar GeoPhoto AI".
+
+------------------------------------------------------------------------
+CONTENIDO DE ESTA CARPETA:
+------------------------------------------------------------------------
+• GeoPhotoAI.exe           -> Ejecutable principal de Windows (36 KB).
+• Iniciar_GeoPhotoAI.bat   -> Lanzador alternativo por si prefieres archivo por lotes.
+• app/                     -> Archivos de la aplicación web y librerías locales.
+• plantillas_ejemplo/      -> Formatos de prueba de Word (.docx) y Excel (.xlsx).
+• app.ico                  -> Icono de la aplicación.
+• LEEME_INSTRUCCIONES.txt  -> Este archivo con las instrucciones.
+
+------------------------------------------------------------------------
+CARACTERISTICAS:
+------------------------------------------------------------------------
+✓ 100% Privado y Seguro: Tus fotos y documentos nunca salen de tu equipo.
+✓ 100% Gratuito: Sin costos de API ni suscripciones.
+✓ 100% Offline: Funciona sin conexión a internet.
+✓ Bloqueo estricto de formato: Word -> Word (.docx), Excel -> Excel (.xlsx).
+✓ Conservación de rotación: Cada giro manual se guarda fielmente en el documento final.
+========================================================================
