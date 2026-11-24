@@ -5266,7 +5266,7 @@ async function generateRealWordDocument(filename, triggerDownload = true) {
 
     // SI ES DEMO O NO CARGÓ PLANTILLA PROPIA:
     // GENERAR CUADRÍCULA LIMPIA CON SÓLO LAS FOTOS (SIN TEXTOS ADICIONALES NI FIRMAS)
-    await generateCleanDemoWordDocument(processedImages, filename);
+    await generateCleanDemoWordDocument(processedImages, filename, triggerDownload);
   } catch (err) {
     console.error('Error al generar Word:', err);
     showToast('Error al generar Word: ' + (err.message || err), 'ph-x-circle text-red-400');
@@ -5612,7 +5612,7 @@ async function injectPhotosIntoUserDocx(rawBuffer, processedImages, filename) {
   }
 }
 
-async function generateCleanDemoWordDocument(processedImages, filename) {
+async function generateCleanDemoWordDocument(processedImages, filename, triggerDownload = true) {
   const { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, ImageRun, WidthType, AlignmentType } = window.docx;
 
   const photoTableRows = [];
