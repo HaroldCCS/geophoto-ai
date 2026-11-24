@@ -370,6 +370,10 @@
   });
 
   window.addEventListener('online', () => setTimeout(processQueue, 1500));
+  // Al abrir la app con conexión y sesión vigente, subir lo que quedó pendiente de la vez anterior
+  setTimeout(processQueue, 2500);
+  // Al volver a la pestaña (p. ej. tras horas en campo) reintentar la cola
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') processQueue(); });
 
   // ==========================================
   // INTERFAZ (vista Descargar)
