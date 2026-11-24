@@ -667,6 +667,13 @@
             <i class="ph-bold ph-hand-pointing text-blue-400"></i>
             <span id="selected-count-label">Mantén presionado para mover</span>
           </div>
+          <div id="multi-select-actions" class="hidden items-center gap-1.5">
+            <button type="button" onclick="selectAllOnPage()" class="px-2 py-1 rounded bg-slate-800 border border-slate-700 text-slate-300 text-[11px] hover:text-white">Toda la página</button>
+            <select id="multi-move-target" onchange="moveSelectedToPage(this.value); this.value=''" class="px-1.5 py-1 rounded bg-slate-800 border border-slate-700 text-slate-300 text-[11px]" aria-label="Mover seleccionadas a página">
+              <option value="">Mover a…</option>
+            </select>
+            <button type="button" onclick="removeSelectedPhotos()" class="px-2 py-1 rounded bg-red-600/90 hover:bg-red-500 text-white text-[11px] font-bold flex items-center gap-1"><i class="ph-bold ph-trash"></i> Retirar</button>
+          </div>
         </div>
 
       </section>
@@ -862,113 +869,104 @@
 
     <!-- Modal de Ajuste de Tamaño, Encuadre y Rotación -->
     <div id="photo-crop-modal" class="hidden fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 select-none transition-all duration-200" onclick="closeCropModal()">
-      <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-sm w-full p-4 shadow-2xl space-y-3 flex flex-col" onclick="event.stopPropagation()">
-        
+      <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-sm w-full max-h-[96vh] overflow-y-auto p-4 shadow-2xl space-y-3 flex flex-col" onclick="event.stopPropagation()">
+
         <!-- Header -->
         <div class="flex items-center justify-between pb-2 border-b border-slate-800">
           <div class="flex items-center gap-1.5">
             <i class="ph-bold ph-crop text-blue-400 text-base"></i>
             <div>
-              <h3 class="text-xs font-bold text-white">Ajustar Tamaño y Encuadre</h3>
+              <h3 class="text-xs font-bold text-white">Ajustar foto</h3>
               <p id="crop-modal-photo-title" class="text-[10px] text-slate-400 font-mono">Foto #1</p>
             </div>
           </div>
-          <button onclick="closeCropModal()" class="w-7 h-7 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center text-xs cursor-pointer">
+          <button onclick="closeCropModal()" class="w-7 h-7 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center text-xs cursor-pointer" aria-label="Cerrar">
             <i class="ph-bold ph-x"></i>
           </button>
         </div>
 
-        <!-- Marco de Simulación de Celda de Formato (4:3) -->
-        <div class="relative w-full aspect-[4/3] bg-slate-950 rounded-xl overflow-hidden border-2 border-dashed border-slate-700 flex items-center justify-center">
-          <div id="crop-preview-box" class="w-full h-full relative overflow-hidden flex items-center justify-center cursor-grab active:cursor-grabbing select-none touch-none" title="Arrastra para mover la zona encuadrada">
-            <img id="crop-preview-img" src="" alt="Encuadre" class="max-w-none transition-transform duration-75 origin-center pointer-events-none select-none">
+        <!-- Marco de la celda del formato (4:3, igual al lienzo de exportación) -->
+        <div class="relative w-full aspect-[4/3] bg-white rounded-xl overflow-hidden border-2 border-dashed border-slate-600">
+          <div id="crop-preview-box" class="absolute inset-0 overflow-hidden cursor-grab active:cursor-grabbing select-none touch-none" title="Arrastra para mover la zona encuadrada">
+            <img id="crop-preview-img" src="" alt="Encuadre" class="pointer-events-none select-none">
           </div>
-          <!-- Retícula guía transparente de encuadre técnico -->
-          <div class="absolute inset-0 pointer-events-none grid grid-cols-3 grid-rows-3 opacity-25">
-            <div class="border-r border-b border-white/30"></div>
-            <div class="border-r border-b border-white/30"></div>
-            <div class="border-b border-white/30"></div>
-            <div class="border-r border-b border-white/30"></div>
-            <div class="border-r border-b border-white/30"></div>
-            <div class="border-b border-white/30"></div>
-            <div class="border-r border-white/30"></div>
-            <div class="border-r border-white/30"></div>
-            <div></div>
+          <div id="crop-grid-overlay" class="absolute inset-0 pointer-events-none grid grid-cols-3 grid-rows-3">
+            <div class="border-r border-b border-sky-400/70"></div><div class="border-r border-b border-sky-400/70"></div><div class="border-b border-sky-400/70"></div>
+            <div class="border-r border-b border-sky-400/70"></div><div class="border-r border-b border-sky-400/70"></div><div class="border-b border-sky-400/70"></div>
+            <div class="border-r border-sky-400/70"></div><div class="border-r border-sky-400/70"></div><div></div>
           </div>
-          <div class="absolute bottom-1 right-2 bg-black/70 px-1.5 py-0.5 rounded text-[9px] text-slate-300 font-mono pointer-events-none">
-            Encuadre de Celda
-          </div>
+          <div class="absolute bottom-1 right-2 bg-black/70 px-1.5 py-0.5 rounded text-[9px] text-slate-200 font-mono pointer-events-none">Celda del informe</div>
         </div>
 
-        <!-- Guía de uso de encuadre -->
-        <div class="text-[10px] text-slate-400 text-center flex items-center justify-center gap-1">
-          <i class="ph-bold ph-hand-pointing text-blue-400"></i>
-          <span>Arrastra la foto o usa las flechas para encuadrar la zona de interés</span>
-        </div>
-
-        <!-- Indicador de Parámetros Actuales -->
         <div class="flex items-center justify-between text-[11px] text-slate-300 px-1">
-          <span>Tamaño / Escala: <strong id="crop-zoom-label" class="text-blue-400 font-mono">100%</strong></span>
+          <span>Tamaño: <strong id="crop-zoom-label" class="text-blue-400 font-mono">100%</strong></span>
           <span>Rotación: <strong id="crop-rot-label" class="text-amber-400 font-mono">0°</strong></span>
         </div>
 
-        <!-- Controles de Rotación y Zoom -->
         <div class="space-y-2.5 text-xs">
-          <!-- Control Deslizante de Zoom / Tamaño -->
-          <div class="flex items-center space-x-2">
-            <button type="button" onclick="adjustCropZoom(-15)" class="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-white flex items-center justify-center text-xs font-bold shrink-0 cursor-pointer active:scale-95 transition" title="Reducir zoom">
-              <i class="ph-bold ph-minus pointer-events-none"></i>
-            </button>
-            <input type="range" id="crop-zoom-slider" min="50" max="250" value="100" class="flex-1 accent-blue-600 h-2 cursor-pointer" oninput="onCropZoomChange(this.value)" onchange="onCropZoomChange(this.value)">
-            <button type="button" onclick="adjustCropZoom(15)" class="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-white flex items-center justify-center text-xs font-bold shrink-0 cursor-pointer active:scale-95 transition" title="Aumentar zoom">
-              <i class="ph-bold ph-plus pointer-events-none"></i>
-            </button>
+          <!-- Zoom -->
+          <div class="flex items-center gap-2">
+            <i class="ph-bold ph-magnifying-glass text-blue-400 w-4"></i>
+            <button type="button" onclick="adjustCropZoom(-10)" class="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-white flex items-center justify-center shrink-0" aria-label="Reducir tamaño"><i class="ph-bold ph-minus pointer-events-none"></i></button>
+            <input type="range" id="crop-zoom-slider" min="50" max="250" value="100" class="flex-1 accent-blue-600 h-2 cursor-pointer" oninput="onCropZoomChange(this.value)" aria-label="Tamaño">
+            <button type="button" onclick="adjustCropZoom(10)" class="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-white flex items-center justify-center shrink-0" aria-label="Aumentar tamaño"><i class="ph-bold ph-plus pointer-events-none"></i></button>
           </div>
 
-          <!-- Botones de Desplazamiento Fino / Encuadre de Zona -->
-          <div class="flex items-center justify-between bg-slate-800/80 px-2.5 py-2 rounded-xl border border-slate-700/60 text-xs">
-            <span class="text-[11px] text-slate-300 flex items-center gap-1 font-semibold">
-              <i class="ph-bold ph-arrows-out-cardinal text-blue-400"></i>
-              <span>Encuadrar:</span>
-            </span>
+          <!-- Rotación libre -->
+          <div class="flex items-center gap-2">
+            <i class="ph-bold ph-arrows-clockwise text-amber-400 w-4"></i>
+            <input type="range" id="crop-rot-slider" min="-180" max="180" step="1" value="0" class="flex-1 accent-amber-500 h-2 cursor-pointer" oninput="onCropRotationChange(this.value)" aria-label="Rotación libre">
+            <input type="number" id="crop-rot-input" min="-180" max="180" step="0.5" value="0" class="w-16 bg-slate-950 border border-slate-700 rounded-lg px-1.5 py-1 text-white font-mono text-right" onchange="onCropRotationChange(this.value)" aria-label="Grados de rotación">
+          </div>
+
+          <!-- Rotación rápida y espejo -->
+          <div class="grid grid-cols-5 gap-1.5">
+            <button type="button" onclick="rotateCropModal(-90)" class="crop-tool" title="Rotar 90° a la izquierda"><i class="ph-bold ph-arrow-counter-clockwise text-amber-400"></i><span>-90°</span></button>
+            <button type="button" onclick="rotateCropModal(90)" class="crop-tool" title="Rotar 90° a la derecha"><i class="ph-bold ph-arrow-clockwise text-amber-400"></i><span>+90°</span></button>
+            <button type="button" onclick="rotateCropModal(180)" class="crop-tool" title="Rotar 180°"><i class="ph-bold ph-arrows-clockwise text-amber-400"></i><span>180°</span></button>
+            <button type="button" id="btn-crop-flip-h" onclick="toggleCropFlip('flipH')" class="crop-tool" title="Espejo horizontal"><i class="ph-bold ph-flip-horizontal text-fuchsia-400"></i><span>Espejo H</span></button>
+            <button type="button" id="btn-crop-flip-v" onclick="toggleCropFlip('flipV')" class="crop-tool" title="Espejo vertical"><i class="ph-bold ph-flip-vertical text-fuchsia-400"></i><span>Espejo V</span></button>
+          </div>
+
+          <!-- Encaje en el marco -->
+          <div class="grid grid-cols-4 gap-1.5">
+            <button type="button" onclick="setCropFitMode('fit')" id="btn-crop-fit" class="crop-tool" title="Auto-ajustar: la foto completa dentro del marco"><i class="ph-bold ph-frame-corners text-blue-400"></i><span>Auto-ajustar</span></button>
+            <button type="button" onclick="setCropFitMode('cover')" id="btn-crop-cover" class="crop-tool" title="Llenar todo el marco recortando bordes"><i class="ph-bold ph-arrows-out-simple text-emerald-400"></i><span>Llenar</span></button>
+            <button type="button" id="btn-crop-lock" onclick="toggleCropLockAspect()" class="crop-tool" title="Bloquear proporciones"><i id="crop-lock-icon" class="ph-bold ph-lock text-sky-400"></i><span id="crop-lock-label">Proporción</span></button>
+            <button type="button" id="btn-crop-grid" onclick="toggleCropGrid()" class="crop-tool" title="Mostrar u ocultar cuadrícula"><i class="ph-bold ph-grid-four text-sky-400"></i><span>Cuadrícula</span></button>
+          </div>
+
+          <!-- Encuadre fino -->
+          <div class="flex items-center justify-between bg-slate-800/80 px-2.5 py-2 rounded-xl border border-slate-700/60">
+            <span class="text-[11px] text-slate-300 flex items-center gap-1 font-semibold"><i class="ph-bold ph-arrows-out-cardinal text-blue-400"></i> Encuadrar</span>
             <div class="flex items-center gap-1.5">
-              <button type="button" onclick="panCrop(0.15, 0)" class="w-8 h-8 rounded-lg bg-slate-700 hover:bg-slate-600 text-white flex items-center justify-center font-bold text-sm cursor-pointer active:scale-95 transition shadow" title="Mover visor a la izquierda">←</button>
-              <button type="button" onclick="panCrop(0, 0.15)" class="w-8 h-8 rounded-lg bg-slate-700 hover:bg-slate-600 text-white flex items-center justify-center font-bold text-sm cursor-pointer active:scale-95 transition shadow" title="Mover visor arriba">↑</button>
-              <button type="button" onclick="panCrop(0, -0.15)" class="w-8 h-8 rounded-lg bg-slate-700 hover:bg-slate-600 text-white flex items-center justify-center font-bold text-sm cursor-pointer active:scale-95 transition shadow" title="Mover visor abajo">↓</button>
-              <button type="button" onclick="panCrop(-0.15, 0)" class="w-8 h-8 rounded-lg bg-slate-700 hover:bg-slate-600 text-white flex items-center justify-center font-bold text-sm cursor-pointer active:scale-95 transition shadow" title="Mover visor a la derecha">→</button>
-              <button type="button" onclick="centerCropPan()" class="px-2.5 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-[11px] font-semibold cursor-pointer active:scale-95 transition shadow" title="Centrar encuadre">Centrar</button>
+              <button type="button" onclick="panCrop(0.1, 0)" class="w-8 h-8 rounded-lg bg-slate-700 hover:bg-slate-600 text-white font-bold" aria-label="Mover foto a la derecha">←</button>
+              <button type="button" onclick="panCrop(0, 0.1)" class="w-8 h-8 rounded-lg bg-slate-700 hover:bg-slate-600 text-white font-bold" aria-label="Mover foto abajo">↑</button>
+              <button type="button" onclick="panCrop(0, -0.1)" class="w-8 h-8 rounded-lg bg-slate-700 hover:bg-slate-600 text-white font-bold" aria-label="Mover foto arriba">↓</button>
+              <button type="button" onclick="panCrop(-0.1, 0)" class="w-8 h-8 rounded-lg bg-slate-700 hover:bg-slate-600 text-white font-bold" aria-label="Mover foto a la izquierda">→</button>
+              <button type="button" onclick="centerCropPan()" class="px-2.5 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-[11px] font-semibold">Centrar</button>
             </div>
           </div>
 
-          <!-- Modos Rápidos y Rotación -->
-          <div class="grid grid-cols-4 gap-1.5 pt-0.5">
-            <button type="button" onclick="setCropFitMode('fit')" id="btn-crop-fit" class="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] font-semibold flex flex-col items-center gap-0.5 cursor-pointer active:scale-95 transition" title="Ajustar completa sin recortar">
-              <i class="ph-bold ph-arrows-in-simple text-sm text-blue-400 pointer-events-none"></i>
-              <span class="pointer-events-none">Ajustar</span>
-            </button>
-            <button type="button" onclick="setCropFitMode('cover')" id="btn-crop-cover" class="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] font-semibold flex flex-col items-center gap-0.5 cursor-pointer active:scale-95 transition" title="Llenar celda completa">
-              <i class="ph-bold ph-arrows-out-simple text-sm text-emerald-400 pointer-events-none"></i>
-              <span class="pointer-events-none">Llenar</span>
-            </button>
-            <button type="button" onclick="rotateCropModal(-90)" class="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] font-semibold flex flex-col items-center gap-0.5 cursor-pointer active:scale-95 transition" title="Rotar 90° a la izquierda">
-              <i class="ph-bold ph-arrow-counter-clockwise text-sm text-amber-400 pointer-events-none"></i>
-              <span class="pointer-events-none">-90°</span>
-            </button>
-            <button type="button" onclick="rotateCropModal(90)" class="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] font-semibold flex flex-col items-center gap-0.5 cursor-pointer active:scale-95 transition" title="Rotar 90° a la derecha">
-              <i class="ph-bold ph-arrow-clockwise text-sm text-amber-400 pointer-events-none"></i>
-              <span class="pointer-events-none">+90°</span>
-            </button>
-          </div>
+          <!-- Límites de tamaño -->
+          <details class="bg-slate-950/60 border border-slate-800 rounded-xl px-2.5 py-2">
+            <summary class="text-[11px] text-slate-300 font-semibold cursor-pointer">Límites de tamaño (todas las fotos)</summary>
+            <div class="grid grid-cols-2 gap-2 mt-2">
+              <label class="space-y-1"><span class="text-[10px] text-slate-400">Tamaño mínimo (%)</span>
+                <input type="number" id="crop-min-scale" min="10" max="100" step="5" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-white font-mono" onchange="onCropLimitsChange()"></label>
+              <label class="space-y-1"><span class="text-[10px] text-slate-400">Tamaño máximo (%)</span>
+                <input type="number" id="crop-max-scale" min="100" max="500" step="10" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-white font-mono" onchange="onCropLimitsChange()"></label>
+              <label class="col-span-2 flex items-center gap-2 text-[11px] text-slate-300">
+                <input type="checkbox" id="crop-uniform-size" onchange="onCropLimitsChange()"> Todas las fotos del informe con el mismo ancho y alto (4:3)
+              </label>
+            </div>
+          </details>
         </div>
 
-        <!-- Botones de Acción -->
-        <div class="grid grid-cols-2 gap-2 pt-2 border-t border-slate-800">
-          <button type="button" onclick="resetCropModal()" class="py-2.5 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold cursor-pointer active:scale-95 transition">
-            Restablecer
-          </button>
-          <button type="button" onclick="saveCropModal()" class="py-2.5 px-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold shadow-lg cursor-pointer active:scale-95 transition">
-            Guardar Ajuste
-          </button>
+        <div class="grid grid-cols-3 gap-2 pt-2 border-t border-slate-800">
+          <button type="button" onclick="resetCropModal()" class="py-2.5 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold">Restablecer</button>
+          <button type="button" onclick="applyCropToSelection()" id="btn-crop-apply-all" class="py-2.5 px-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] font-semibold" title="Copiar este ajuste a todas las fotos de la página">Aplicar a la página</button>
+          <button type="button" onclick="saveCropModal()" class="py-2.5 px-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold shadow-lg">Guardar</button>
         </div>
 
       </div>

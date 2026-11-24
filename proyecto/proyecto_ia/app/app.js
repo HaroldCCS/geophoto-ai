@@ -44,7 +44,13 @@ const state = {
     lon: -75.5812,
     // Google Drive: enlace y carpeta de destino (por defecto: 'proyecto')
     gdriveLink: localStorage.getItem('geophoto_gdrive_link') || '',
-    gdriveFolder: localStorage.getItem('geophoto_gdrive_folder') || 'proyecto'
+    gdriveFolder: localStorage.getItem('geophoto_gdrive_folder') || 'proyecto',
+    // Mesa de ajuste (RQ-12, RQ-15, RQ-16, RQ-19)
+    showCropGrid: true,
+    minScalePct: 50,
+    maxScalePct: 250,
+    uniformPhotoSize: true,
+    userName: ''
   },
   template: {
     name: 'Formato_Interventoria_4Fotos.docx',
@@ -3173,15 +3179,7 @@ window.simulateAiScanning = simulateAiScanning;
 function initCanvasModule() {
   document.getElementById('btn-toggle-multi-select').addEventListener('click', () => {
     state.isMultiSelectMode = !state.isMultiSelectMode;
-    const btn = document.getElementById('btn-toggle-multi-select');
-    if (state.isMultiSelectMode) {
-      btn.className = 'px-2.5 py-1 rounded bg-emerald-600 text-white text-[11px] font-bold';
-      document.getElementById('selected-count-label').textContent = 'Toca fotos para seleccionar en bloque';
-    } else {
-      btn.className = 'px-2.5 py-1 rounded bg-slate-800 border border-slate-700 text-slate-300 text-[11px]';
-      state.selectedPhotoIds.clear();
-      document.getElementById('selected-count-label').textContent = 'Mantén presionado para mover';
-    }
+    if (!state.isMultiSelectMode) state.selectedPhotoIds.clear();
     updateCanvasGrid();
   });
 
@@ -3210,15 +3208,8 @@ function openPhotoLightbox(photo, globalIndex) {
   if (!modal || !img) return;
 
   img.src = photo.url;
-  const lbTx = (photo.offsetX || 0) * 100;
-  const lbTy = (photo.offsetY || 0) * 100;
-  const rot = ((photo.rotation || 0) % 360 + 360) % 360;
-  const isSideways = (rot === 90 || rot === 270);
-  const sidewaysScale = isSideways ? (photo.fitMode === 'cover' ? 1.33 : 0.75) : 1.0;
-  const finalScale = (photo.scale || 1.0) * sidewaysScale;
-  img.style.transform = (photo.offsetX || photo.offsetY)
-    ? `translate(${lbTx}%, ${lbTy}%) rotate(${rot}deg) scale(${finalScale})`
-    : `rotate(${rot}deg) scale(${finalScale});`;
+  // Vista grande: orientación final (rotación y espejo) sin recorte
+  img.style.transform = `rotate(${Number(photo.rotation || 0)}deg) scale(${photo.flipH ? -1 : 1}, ${photo.flipV ? -1 : 1})`;
 
   if (title) {
     title.textContent = photo.title || `Foto #${(globalIndex !== undefined ? globalIndex : 0) + 1}`;
@@ -3296,21 +3287,12 @@ function initLightboxActionButtons() {
 function rotateFromLightbox() {
   if (currentLightboxIndex >= 0 && currentLightboxIndex < state.photos.length) {
     const photo = state.photos[currentLightboxIndex];
-    photo.rotation = ((photo.rotation || 0) + 90) % 360;
+    let r = (((photo.rotation || 0) + 90) % 360 + 360) % 360;
+    if (r > 180) r -= 360;
+    photo.rotation = r;
     delete photo.previewUrl;
     const img = document.getElementById('lightbox-img');
-    if (img) {
-      img.src = photo.url;
-      const lbTx = (photo.offsetX || 0) * 100;
-      const lbTy = (photo.offsetY || 0) * 100;
-      const rot = photo.rotation;
-      const isSideways = (rot === 90 || rot === 270);
-      const sidewaysScale = isSideways ? (photo.fitMode === 'cover' ? 1.33 : 0.75) : 1.0;
-      const finalScale = (photo.scale || 1.0) * sidewaysScale;
-      img.style.transform = (photo.offsetX || photo.offsetY)
-        ? `translate(${lbTx}%, ${lbTy}%) rotate(${rot}deg) scale(${finalScale})`
-        : `rotate(${rot}deg) scale(${finalScale});`;
-    }
+    if (img) img.style.transform = `rotate(${r}deg) scale(${photo.flipH ? -1 : 1}, ${photo.flipV ? -1 : 1})`;
     const rotBadge = document.getElementById('lightbox-photo-rot');
     if (rotBadge) {
       rotBadge.textContent = `⟳ ${photo.rotation}°`;
@@ -3337,13 +3319,35 @@ window.openCropFromLightbox = openCropFromLightbox;
 // MODAL DE AJUSTE DE TAMAÑO, ENCUADRE Y ROTACIÓN
 // ==========================================
 let currentCropIndex = -1;
+const CROP_FIELDS = ['rotation', 'scale', 'fitMode', 'offsetX', 'offsetY', 'flipH', 'flipV', 'lockAspect'];
 let cropState = {
   rotation: 0,
   scale: 1.0,
   fitMode: 'fit',
   offsetX: 0,
-  offsetY: 0
+  offsetY: 0,
+  flipH: false,
+  flipV: false,
+  lockAspect: true
 };
+
+function getScaleLimits() {
+  const min = Math.max(0.1, Math.min(1, (Number(state.config.minScalePct) || 50) / 100));
+  const max = Math.max(1, Math.min(5, (Number(state.config.maxScalePct) || 250) / 100));
+  return { min, max };
+}
+
+function clampCropScale(v) {
+  const { min, max } = getScaleLimits();
+  return Math.max(min, Math.min(max, v));
+}
+
+// Normaliza un ángulo a (-180, 180]
+function normalizeAngle(deg) {
+  let a = ((Number(deg) % 360) + 360) % 360;
+  if (a > 180) a -= 360;
+  return Math.round(a * 10) / 10;
+}
 
 let isDraggingCrop = false;
 let cropDragStartX = 0;
@@ -3378,6 +3382,12 @@ function initCropDragListeners() {
     updateCropPreview();
   });
 
+  // Rueda del ratón = zoom
+  box.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    adjustCropZoom(e.deltaY < 0 ? 5 : -5);
+  }, { passive: false });
+
   const stopDrag = () => {
     isDraggingCrop = false;
   };
@@ -3387,11 +3397,6 @@ function initCropDragListeners() {
 }
 
 function panCrop(dx, dy) {
-  // Si está en fit mode sin zoom, activar cover y zoom al 125% para que el encuadre sea visible de inmediato
-  if (cropState.fitMode === 'fit' && (cropState.scale || 1.0) <= 1.05) {
-    cropState.fitMode = 'cover';
-    cropState.scale = 1.25;
-  }
   cropState.offsetX = Math.max(-1.5, Math.min(1.5, (cropState.offsetX || 0) + dx));
   cropState.offsetY = Math.max(-1.5, Math.min(1.5, (cropState.offsetY || 0) + dy));
   updateCropPreview();
@@ -3410,11 +3415,14 @@ function openCropModal(globalIndex) {
   currentCropIndex = globalIndex;
   const photo = state.photos[globalIndex];
 
-  cropState.rotation = photo.rotation || 0;
+  cropState.rotation = normalizeAngle(photo.rotation || 0);
   cropState.scale = photo.scale !== undefined ? photo.scale : 1.0;
   cropState.fitMode = photo.fitMode || 'fit';
   cropState.offsetX = photo.offsetX || 0;
   cropState.offsetY = photo.offsetY || 0;
+  cropState.flipH = !!photo.flipH;
+  cropState.flipV = !!photo.flipV;
+  cropState.lockAspect = photo.lockAspect !== false;
 
   initCropDragListeners();
 
@@ -3423,9 +3431,18 @@ function openCropModal(globalIndex) {
   const img = document.getElementById('crop-preview-img');
 
   if (title) title.textContent = `${photo.title || ('Foto #' + (globalIndex + 1))} - ${photo.isPreExisting ? 'Preexistente' : 'Nueva'}`;
-  if (img) img.src = photo.url;
+  const minInp = document.getElementById('crop-min-scale');
+  const maxInp = document.getElementById('crop-max-scale');
+  const uniInp = document.getElementById('crop-uniform-size');
+  if (minInp) minInp.value = Math.round(getScaleLimits().min * 100);
+  if (maxInp) maxInp.value = Math.round(getScaleLimits().max * 100);
+  if (uniInp) uniInp.checked = state.config.uniformPhotoSize !== false;
 
   if (modal) modal.classList.remove('hidden');
+  if (img) {
+    img.onload = () => updateCropPreview();
+    img.src = photo.url;
+  }
   updateCropPreview();
 }
 window.openCropModal = openCropModal;
@@ -3438,92 +3455,122 @@ function closeCropModal() {
 }
 window.closeCropModal = closeCropModal;
 
+function setToolActive(id, active) {
+  const el = document.getElementById(id);
+  if (el) el.classList.toggle('is-active', !!active);
+}
+
 function updateCropPreview() {
   const img = document.getElementById('crop-preview-img');
+  const box = document.getElementById('crop-preview-box');
+  const scaleVal = cropState.scale !== undefined ? cropState.scale : 1.0;
+  const { min, max } = getScaleLimits();
+
   const zoomLabel = document.getElementById('crop-zoom-label');
   const rotLabel = document.getElementById('crop-rot-label');
   const zoomSlider = document.getElementById('crop-zoom-slider');
-  const btnFit = document.getElementById('btn-crop-fit');
-  const btnCover = document.getElementById('btn-crop-cover');
-  const box = document.getElementById('crop-preview-box');
-
-  const scaleVal = cropState.scale !== undefined ? cropState.scale : 1.0;
+  const rotSlider = document.getElementById('crop-rot-slider');
+  const rotInput = document.getElementById('crop-rot-input');
   if (zoomLabel) zoomLabel.textContent = `${Math.round(scaleVal * 100)}%`;
-  if (rotLabel) rotLabel.textContent = `${cropState.rotation || 0}°`;
-  if (zoomSlider) zoomSlider.value = Math.round(scaleVal * 100);
-
-  if (btnFit && btnCover) {
-    if (cropState.fitMode === 'cover') {
-      btnCover.classList.add('ring-2', 'ring-emerald-400', 'bg-slate-700');
-      btnFit.classList.remove('ring-2', 'ring-blue-400', 'bg-slate-700');
-    } else {
-      btnFit.classList.add('ring-2', 'ring-blue-400', 'bg-slate-700');
-      btnCover.classList.remove('ring-2', 'ring-emerald-400', 'bg-slate-700');
-    }
+  if (rotLabel) rotLabel.textContent = `${cropState.rotation || 0}°${cropState.flipH ? ' · espejo H' : ''}${cropState.flipV ? ' · espejo V' : ''}`;
+  if (zoomSlider) {
+    zoomSlider.min = Math.round(min * 100);
+    zoomSlider.max = Math.round(max * 100);
+    zoomSlider.value = Math.round(scaleVal * 100);
   }
+  if (rotSlider) rotSlider.value = cropState.rotation || 0;
+  if (rotInput && document.activeElement !== rotInput) rotInput.value = cropState.rotation || 0;
 
-  if (!img) return;
+  setToolActive('btn-crop-fit', cropState.lockAspect && cropState.fitMode !== 'cover');
+  setToolActive('btn-crop-cover', cropState.lockAspect && cropState.fitMode === 'cover');
+  setToolActive('btn-crop-flip-h', cropState.flipH);
+  setToolActive('btn-crop-flip-v', cropState.flipV);
+  setToolActive('btn-crop-lock', cropState.lockAspect);
+  setToolActive('btn-crop-grid', state.config.showCropGrid !== false);
+  const lockIcon = document.getElementById('crop-lock-icon');
+  const lockLabel = document.getElementById('crop-lock-label');
+  if (lockIcon) lockIcon.className = `ph-bold ${cropState.lockAspect ? 'ph-lock' : 'ph-lock-open'} text-sky-400`;
+  if (lockLabel) lockLabel.textContent = cropState.lockAspect ? 'Proporción fija' : 'Estirar';
+  const grid = document.getElementById('crop-grid-overlay');
+  if (grid) grid.classList.toggle('hidden', state.config.showCropGrid === false);
 
-  const boxW = (box && box.clientWidth) ? box.clientWidth : 320;
-  const boxH = (box && box.clientHeight) ? box.clientHeight : 240;
-  const tx = (cropState.offsetX || 0) * boxW;
-  const ty = (cropState.offsetY || 0) * boxH;
-
-  const rot = ((cropState.rotation || 0) % 360 + 360) % 360;
-  const isSideways = (rot === 90 || rot === 270);
-  let sidewaysCompensation = 1.0;
-  if (isSideways) {
-    sidewaysCompensation = (cropState.fitMode === 'cover') ? (boxW / boxH) : (boxH / boxW);
-  }
-  const effectiveScale = scaleVal * sidewaysCompensation;
-
-  img.style.transform = `translate(${tx}px, ${ty}px) rotate(${rot}deg) scale(${effectiveScale})`;
-  if (cropState.fitMode === 'cover') {
-    img.className = 'w-full h-full object-cover origin-center pointer-events-none select-none transition-transform duration-75';
-  } else {
-    img.className = 'max-w-full max-h-full object-contain origin-center pointer-events-none select-none transition-transform duration-75';
-  }
+  if (!img || !box) return;
+  const boxW = box.clientWidth || 320;
+  const boxH = box.clientHeight || 240;
+  applyPhotoLayoutToImg(img, cropState, boxW, boxH);
 }
 window.updateCropPreview = updateCropPreview;
 
 function onCropZoomChange(val) {
-  cropState.scale = Math.max(0.5, Math.min(2.5, parseFloat(val) / 100));
-  if (cropState.scale > 1.05) {
-    cropState.fitMode = 'cover';
-  }
+  cropState.scale = clampCropScale(parseFloat(val) / 100);
   updateCropPreview();
 }
 window.onCropZoomChange = onCropZoomChange;
 
 function adjustCropZoom(deltaPercent) {
   const currentPct = Math.round((cropState.scale !== undefined ? cropState.scale : 1.0) * 100);
-  const newPct = Math.max(50, Math.min(250, currentPct + deltaPercent));
-  cropState.scale = newPct / 100;
-  if (cropState.scale > 1.05) {
-    cropState.fitMode = 'cover';
-  }
+  cropState.scale = clampCropScale((currentPct + deltaPercent) / 100);
   updateCropPreview();
 }
 window.adjustCropZoom = adjustCropZoom;
 
+function onCropRotationChange(val) {
+  const n = parseFloat(val);
+  if (Number.isNaN(n)) return;
+  cropState.rotation = normalizeAngle(n);
+  updateCropPreview();
+}
+window.onCropRotationChange = onCropRotationChange;
+
+// Auto-ajustar (fit) restablece tamaño y encuadre; Llenar (cover) cubre todo el marco
 function setCropFitMode(mode) {
   cropState.fitMode = mode;
-  if (mode === 'fit') {
-    cropState.scale = 1.0;
-    cropState.offsetX = 0;
-    cropState.offsetY = 0;
-  } else if (mode === 'cover' && cropState.scale < 1.0) {
-    cropState.scale = 1.0;
-  }
+  cropState.lockAspect = true;
+  cropState.scale = 1.0;
+  cropState.offsetX = 0;
+  cropState.offsetY = 0;
   updateCropPreview();
 }
 window.setCropFitMode = setCropFitMode;
 
 function rotateCropModal(delta) {
-  cropState.rotation = ((cropState.rotation || 0) + delta + 360) % 360;
+  cropState.rotation = normalizeAngle((cropState.rotation || 0) + delta);
   updateCropPreview();
 }
 window.rotateCropModal = rotateCropModal;
+
+function toggleCropFlip(axis) {
+  cropState[axis] = !cropState[axis];
+  updateCropPreview();
+}
+window.toggleCropFlip = toggleCropFlip;
+
+function toggleCropLockAspect() {
+  cropState.lockAspect = !cropState.lockAspect;
+  if (!cropState.lockAspect) { cropState.offsetX = 0; cropState.offsetY = 0; cropState.scale = 1.0; }
+  updateCropPreview();
+}
+window.toggleCropLockAspect = toggleCropLockAspect;
+
+function toggleCropGrid() {
+  state.config.showCropGrid = state.config.showCropGrid === false;
+  scheduleOfflineSave();
+  updateCropPreview();
+}
+window.toggleCropGrid = toggleCropGrid;
+
+function onCropLimitsChange() {
+  const minInp = document.getElementById('crop-min-scale');
+  const maxInp = document.getElementById('crop-max-scale');
+  const uniInp = document.getElementById('crop-uniform-size');
+  if (minInp) state.config.minScalePct = Math.max(10, Math.min(100, Number(minInp.value) || 50));
+  if (maxInp) state.config.maxScalePct = Math.max(100, Math.min(500, Number(maxInp.value) || 250));
+  if (uniInp) state.config.uniformPhotoSize = !!uniInp.checked;
+  cropState.scale = clampCropScale(cropState.scale || 1);
+  scheduleOfflineSave();
+  updateCropPreview();
+}
+window.onCropLimitsChange = onCropLimitsChange;
 
 function resetCropModal() {
   const initRot = (currentCropIndex >= 0 && state.photos[currentCropIndex]) ? (state.photos[currentCropIndex].initialRotation || 0) : 0;
@@ -3532,6 +3579,9 @@ function resetCropModal() {
   cropState.fitMode = 'fit';
   cropState.offsetX = 0;
   cropState.offsetY = 0;
+  cropState.flipH = false;
+  cropState.flipV = false;
+  cropState.lockAspect = true;
   updateCropPreview();
 }
 window.resetCropModal = resetCropModal;
@@ -3541,26 +3591,40 @@ function updatePhotoPreviewUrl(photo) {
 }
 window.updatePhotoPreviewUrl = updatePhotoPreviewUrl;
 
+function copyCropStateTo(photo) {
+  CROP_FIELDS.forEach(k => { photo[k] = cropState[k]; });
+  delete photo.previewUrl;
+}
+
+function afterCropChange(message) {
+  closeCropModal();
+  updateCanvasGrid();
+  if (typeof updateDirectDownloadView === 'function') updateDirectDownloadView();
+  scheduleOfflineSave();
+  showToast(message, 'ph-check-circle text-emerald-400');
+}
+
 function saveCropModal() {
   if (currentCropIndex < 0 || currentCropIndex >= state.photos.length) {
     closeCropModal();
     return;
   }
   const photo = state.photos[currentCropIndex];
-  photo.rotation = cropState.rotation || 0;
-  photo.scale = cropState.scale !== undefined ? cropState.scale : 1.0;
-  photo.fitMode = cropState.fitMode || 'fit';
-  photo.offsetX = cropState.offsetX || 0;
-  photo.offsetY = cropState.offsetY || 0;
-  delete photo.previewUrl;
-
-  closeCropModal();
-  updateCanvasGrid();
-  if (typeof updateDirectDownloadView === 'function') updateDirectDownloadView();
-  scheduleOfflineSave();
-  showToast(`Ajuste guardado: ${photo.rotation}° de rotación, ${Math.round(photo.scale * 100)}% de tamaño`, 'ph-check-circle text-emerald-400');
+  copyCropStateTo(photo);
+  afterCropChange(`Ajuste guardado: ${photo.rotation}°${photo.flipH || photo.flipV ? ', espejo' : ''}, ${Math.round(photo.scale * 100)}% de tamaño`);
 }
 window.saveCropModal = saveCropModal;
+
+// Copia el ajuste actual a todas las fotos de la página visible (encaje uniforme rápido)
+function applyCropToSelection() {
+  if (currentCropIndex < 0) return;
+  const per = state.template.slotsPerPage || 4;
+  const start = (state.currentPage - 1) * per;
+  const targets = state.photos.slice(start, start + per);
+  targets.forEach(copyCropStateTo);
+  afterCropChange(`Ajuste aplicado a ${targets.length} fotos de la página ${state.currentPage}`);
+}
+window.applyCropToSelection = applyCropToSelection;
 
 // ==========================================
 // RENDERIZADO DEL LIENZO / MESA DE TRABAJO
@@ -3587,7 +3651,7 @@ function updateCanvasGrid() {
     card.draggable = true;
     card.dataset.index = globalIndex;
     card.dataset.id = photo.id;
-    card.title = "Doble clic para ver en tamaño completo";
+    card.title = "Doble clic para ajustar la foto";
 
     // Etiqueta preexistente vs nueva y badges de ajuste
     const tagHtml = photo.isPreExisting
@@ -3601,32 +3665,25 @@ function updateCanvasGrid() {
       ? `<span class="bg-blue-500/20 text-blue-300 text-[9px] px-1.5 py-0.2 rounded font-mono font-medium">${Math.round(photo.scale * 100)}%</span>` 
       : '';
 
-    const cardTx = (photo.offsetX || 0) * 100;
-    const cardTy = (photo.offsetY || 0) * 100;
-    const rot = ((photo.rotation || 0) % 360 + 360) % 360;
-    const isSideways = (rot === 90 || rot === 270);
-    const sidewaysScale = isSideways ? (photo.fitMode === 'cover' ? 1.33 : 0.75) : 1.0;
-    const finalScale = (photo.scale || 1.0) * sidewaysScale;
-    const cardTransform = (photo.offsetX || photo.offsetY)
-      ? `transform: translate(${cardTx}%, ${cardTy}%) rotate(${rot}deg) scale(${finalScale});`
-      : `transform: rotate(${rot}deg) scale(${finalScale});`;
+    const flipBadge = (photo.flipH || photo.flipV)
+      ? `<span class="bg-fuchsia-500/20 text-fuchsia-300 text-[9px] px-1.5 py-0.2 rounded font-medium">Espejo</span>`
+      : '';
 
     card.innerHTML = `
       <div class="flex items-center justify-between text-[11px]">
         <strong class="text-white font-mono">Foto #${globalIndex + 1}</strong>
         <div class="flex items-center gap-1">
           ${rotBadge}
+          ${flipBadge}
           ${zoomBadge}
           ${tagHtml}
         </div>
       </div>
 
       <!-- Contenedor Imagen con Rotación, Escala y Botón de Lupa -->
-      <div class="photo-img-wrapper w-full h-28 bg-slate-950 rounded-lg overflow-hidden relative flex items-center justify-center cursor-pointer group/img" title="Doble clic para agrandar">
-        <img src="${photo.url}" alt="${photo.title}" 
-             class="${photo.fitMode === 'cover' ? 'w-full h-full object-cover' : 'max-w-full max-h-full object-contain'} transition-transform duration-200 pointer-events-none"
-             style="${cardTransform}" />
-        
+      <div class="photo-img-wrapper w-full aspect-[4/3] bg-white rounded-lg overflow-hidden relative cursor-pointer group/img" title="Doble clic para agrandar">
+        <img src="${photo.url}" alt="${photo.title}" class="card-photo-img pointer-events-none" draggable="false" />
+
         <!-- Botón de lupa para zoom rápido -->
         <button class="btn-quick-zoom absolute bottom-1 right-1 bg-black/70 hover:bg-black text-white/90 p-1 rounded text-xs transition" title="Ver en tamaño grande (Doble clic)">
           <i class="ph-bold ph-magnifying-glass-plus"></i>
@@ -3661,10 +3718,10 @@ function updateCanvasGrid() {
       </div>
     `;
 
-    // Doble clic en la tarjeta o imagen abre el Lightbox
+    // Doble clic abre el editor de ajuste (zoom, desplazamiento, giro, restablecer, guardar) — RQ-22
     card.addEventListener('dblclick', (e) => {
       e.preventDefault();
-      openPhotoLightbox(photo, globalIndex);
+      openCropModal(globalIndex);
     });
 
     // Clic en el botón de lupa también abre el Lightbox
@@ -3696,13 +3753,24 @@ function updateCanvasGrid() {
     card.addEventListener('dragend', handleDragEnd);
 
     grid.appendChild(card);
+    layoutPhotoInBox(card.querySelector('.card-photo-img'), photo, card.querySelector('.photo-img-wrapper'));
   });
+
+  if (!state.photos.length) {
+    grid.innerHTML = `<div class="col-span-full py-10 text-center text-xs text-slate-500 space-y-2">
+      <i class="ph-bold ph-images text-3xl text-slate-600"></i>
+      <p>Este proyecto aún no tiene fotos.</p>
+      <p>Usa <strong>Cámara</strong> o <strong>Galería</strong> para agregarlas.</p></div>`;
+  }
+  updateMultiSelectBar();
 }
 
 function rotateCardPhoto(globalIndex) {
   if (globalIndex >= 0 && globalIndex < state.photos.length) {
     const photo = state.photos[globalIndex];
-    photo.rotation = ((photo.rotation || 0) + 90) % 360;
+    let r = (((photo.rotation || 0) + 90) % 360 + 360) % 360;
+    if (r > 180) r -= 360;
+    photo.rotation = r;
     delete photo.previewUrl;
     updateCanvasGrid();
     if (typeof updateDirectDownloadView === 'function') updateDirectDownloadView();
@@ -3860,6 +3928,94 @@ function closeMovePageModal() {
 }
 window.closeMovePageModal = closeMovePageModal;
 
+// ==========================================
+// SELECCIÓN MÚLTIPLE: retirar y mover en bloque (RQ-23)
+// ==========================================
+function updateMultiSelectBar() {
+  const btn = document.getElementById('btn-toggle-multi-select');
+  const label = document.getElementById('selected-count-label');
+  const actions = document.getElementById('multi-select-actions');
+  const n = state.selectedPhotoIds.size;
+  if (btn) {
+    btn.className = state.isMultiSelectMode
+      ? 'px-2.5 py-1 rounded bg-emerald-600 text-white text-[11px] font-bold'
+      : 'px-2.5 py-1 rounded bg-slate-800 border border-slate-700 text-slate-300 text-[11px] hover:text-white';
+    btn.innerHTML = state.isMultiSelectMode ? '<i class="ph-bold ph-x"></i> Terminar' : '<i class="ph-bold ph-check-square-offset"></i> Seleccionar';
+  }
+  if (label) {
+    label.textContent = state.isMultiSelectMode
+      ? (n ? `${n} seleccionada${n === 1 ? '' : 's'}` : 'Toca fotos para seleccionarlas')
+      : 'Doble clic para ajustar · arrastra para mover';
+  }
+  if (actions) {
+    actions.classList.toggle('hidden', !state.isMultiSelectMode);
+    actions.classList.toggle('flex', state.isMultiSelectMode);
+    actions.querySelectorAll('button:not(:first-child), select').forEach(el => { el.disabled = n === 0; el.classList.toggle('opacity-40', n === 0); });
+    const sel = document.getElementById('multi-move-target');
+    if (sel) {
+      const per = state.template.slotsPerPage || 4;
+      const pages = Math.max(1, Math.ceil(state.photos.length / per));
+      sel.innerHTML = '<option value="">Mover a…</option>' + Array.from({ length: pages }, (_, i) => `<option value="${i + 1}">Página ${i + 1}</option>`).join('');
+    }
+  }
+}
+window.updateMultiSelectBar = updateMultiSelectBar;
+
+function renumberPhotos() {
+  state.photos.forEach((p, i) => { p.title = `Foto #${i + 1}`; });
+}
+
+function refreshAfterPhotoSetChange() {
+  const per = state.template.slotsPerPage || 4;
+  const pages = Math.max(1, Math.ceil(state.photos.length / per));
+  if (state.currentPage > pages) state.currentPage = pages;
+  const badge = document.getElementById('canvas-badge-count');
+  if (badge) badge.textContent = state.photos.length;
+  updateCanvasGrid();
+  renderPagination();
+  if (typeof updateDirectDownloadView === 'function') updateDirectDownloadView();
+  scheduleOfflineSave();
+}
+
+function selectAllOnPage() {
+  const per = state.template.slotsPerPage || 4;
+  const start = (state.currentPage - 1) * per;
+  state.photos.slice(start, start + per).forEach(p => state.selectedPhotoIds.add(p.id));
+  updateCanvasGrid();
+}
+window.selectAllOnPage = selectAllOnPage;
+
+// Retira las fotos de la app. Nunca toca los archivos del dispositivo: se pueden volver a cargar.
+function removeSelectedPhotos() {
+  const n = state.selectedPhotoIds.size;
+  if (!n) return;
+  if (!confirm(`¿Retirar ${n} foto${n === 1 ? '' : 's'} del informe?\n\nSolo se quitan de la app; los archivos originales en tu dispositivo no se borran y puedes volver a cargarlos.`)) return;
+  state.photos = state.photos.filter(p => !state.selectedPhotoIds.has(p.id));
+  state.selectedPhotoIds.clear();
+  renumberPhotos();
+  refreshAfterPhotoSetChange();
+  showToast(`${n} foto${n === 1 ? '' : 's'} retirada${n === 1 ? '' : 's'} de la app (no del dispositivo)`, 'ph-trash text-amber-400');
+}
+window.removeSelectedPhotos = removeSelectedPhotos;
+
+// Mueve las seleccionadas, en su orden actual, al inicio de la página destino
+function moveSelectedToPage(targetPage) {
+  targetPage = Number(targetPage);
+  if (!targetPage || !state.selectedPhotoIds.size) return;
+  const per = state.template.slotsPerPage || 4;
+  const moving = state.photos.filter(p => state.selectedPhotoIds.has(p.id));
+  const rest = state.photos.filter(p => !state.selectedPhotoIds.has(p.id));
+  const insertAt = Math.min((targetPage - 1) * per, rest.length);
+  rest.splice(insertAt, 0, ...moving);
+  state.photos = rest;
+  renumberPhotos();
+  state.currentPage = Math.min(targetPage, Math.max(1, Math.ceil(state.photos.length / per)));
+  state.selectedPhotoIds.clear();
+  refreshAfterPhotoSetChange();
+  showToast(`${moving.length} foto${moving.length === 1 ? '' : 's'} movida${moving.length === 1 ? '' : 's'} a la página ${targetPage}`, 'ph-files text-blue-400');
+}
+window.moveSelectedToPage = moveSelectedToPage;
+
 function deletePhoto(index) {
   const removed = state.photos.splice(index, 1)[0];
   state.photos.forEach((p, i) => p.title = `Foto #${i + 1}`);
@@ -3869,7 +4025,7 @@ function deletePhoto(index) {
   renderPagination();
   if (typeof updateDirectDownloadView === 'function') updateDirectDownloadView();
   scheduleOfflineSave();
-  showToast(`Foto eliminada. Celdas reacomodadas automáticamente`, 'ph-trash text-amber-400');
+  showToast(`Foto retirada de la app (el archivo original sigue en tu dispositivo)`, 'ph-trash text-amber-400');
 }
 
 function renderPagination() {
@@ -4322,17 +4478,7 @@ function updateDirectDownloadView() {
     }
 
     galleryElem.innerHTML = state.photos.map((photo, i) => {
-      const rot = ((photo.rotation || 0) % 360 + 360) % 360;
-      const isSideways = (rot === 90 || rot === 270);
-      const sidewaysScale = isSideways ? (photo.fitMode === 'cover' ? 1.33 : 0.75) : 1.0;
-      const finalScale = (photo.scale || 1.0) * sidewaysScale;
-      const tx = (photo.offsetX || 0) * 100;
-      const ty = (photo.offsetY || 0) * 100;
-
-      const transformStyle = (photo.offsetX || photo.offsetY)
-        ? `transform: translate(${tx}%, ${ty}%) rotate(${rot}deg) scale(${finalScale});`
-        : `transform: rotate(${rot}deg) scale(${finalScale});`;
-
+      const rot = Number(photo.rotation || 0);
       const rotBadge = rot !== 0
         ? `<span class="bg-blue-600 text-white px-1 py-0.5 rounded text-[9px] font-mono font-bold">⟳ ${rot}°</span>`
         : '';
@@ -4346,10 +4492,8 @@ function updateDirectDownloadView() {
             <span class="font-mono text-slate-300 font-bold">Foto #${i + 1}</span>
             <div class="flex items-center gap-1">${rotBadge}${zoomBadge}</div>
           </div>
-          <div class="w-full h-20 bg-slate-950 rounded overflow-hidden relative flex items-center justify-center">
-            <img src="${photo.url}" alt="${photo.title || ('Foto #' + (i + 1))}"
-                 class="${photo.fitMode === 'cover' ? 'w-full h-full object-cover' : 'max-w-full max-h-full object-contain'} pointer-events-none"
-                 style="${transformStyle}" />
+          <div class="dl-thumb-box w-full aspect-[4/3] bg-white rounded overflow-hidden relative" data-idx="${i}">
+            <img src="${photo.url}" alt="${photo.title || ('Foto #' + (i + 1))}" class="pointer-events-none" />
           </div>
           <p class="text-[9px] text-slate-400 truncate" title="${photo.note || photo.title}">
             ${photo.note ? photo.note : (photo.title || 'Evidencia lista')}
@@ -4357,6 +4501,10 @@ function updateDirectDownloadView() {
         </div>
       `;
     }).join('');
+    galleryElem.querySelectorAll('.dl-thumb-box').forEach(box => {
+      const ph = state.photos[Number(box.dataset.idx)];
+      if (ph) layoutPhotoInBox(box.querySelector('img'), ph, box);
+    });
   }
 }
 window.updateDirectDownloadView = updateDirectDownloadView;
@@ -4489,6 +4637,92 @@ function drawLogoOnCanvas(ctx, logoImg, x, y, w, h, opacity, scale) {
   ctx.restore();
 }
 
+// ==========================================
+// MODELO ÚNICO DE AJUSTE DE FOTO (vista previa = exportación)
+// ==========================================
+// Calcula cómo se dibuja una foto dentro de un marco W×H a partir de sus ajustes:
+// rotación libre (grados), espejo H/V, escala de usuario, modo fit/cover, bloqueo de
+// proporciones y desplazamiento. Lo usan la mesa, el modal de ajuste y el render de
+// exportación, para que lo que se ve sea exactamente lo que sale en Word/Excel.
+function computePhotoLayout(photo, W, H, nw, nh) {
+  nw = nw || W; nh = nh || H;
+  const rot = Number(photo.rotation || 0);
+  const rad = (rot * Math.PI) / 180;
+  const c = Math.abs(Math.cos(rad));
+  const sn = Math.abs(Math.sin(rad));
+  const userScale = photo.scale !== undefined ? Number(photo.scale) : 1.0;
+  const lockAspect = photo.lockAspect !== false;
+  const mode = photo.fitMode || 'fit';
+  let w, h, comp;
+  if (!lockAspect) {
+    // Proporciones libres: la foto se estira para llenar el marco exacto
+    w = W; h = H;
+    comp = Math.min(W / (w * c + h * sn), H / (w * sn + h * c));
+  } else if (mode === 'cover') {
+    const s0 = Math.max(W / nw, H / nh);
+    w = nw * s0; h = nh * s0;
+    // Escala mínima para que la foto rotada siga cubriendo todo el marco
+    comp = Math.max((W * c + H * sn) / w, (W * sn + H * c) / h);
+  } else {
+    const s0 = Math.min(W / nw, H / nh);
+    w = nw * s0; h = nh * s0;
+    // Escala para que la foto rotada quepa completa en el marco
+    comp = Math.min(W / (w * c + h * sn), H / (w * sn + h * c));
+  }
+  const k = comp * userScale;
+  return {
+    drawW: w * k,
+    drawH: h * k,
+    tx: (photo.offsetX || 0) * W,
+    ty: (photo.offsetY || 0) * H,
+    rot,
+    sx: photo.flipH ? -1 : 1,
+    sy: photo.flipV ? -1 : 1
+  };
+}
+window.computePhotoLayout = computePhotoLayout;
+
+// ¿La foto tiene algún ajuste que obligue a re-renderizarla?
+function photoHasAdjustments(photo) {
+  const rot = ((Number(photo.rotation || 0) % 360) + 360) % 360;
+  return rot !== 0 || !!photo.flipH || !!photo.flipV || photo.lockAspect === false ||
+    (photo.fitMode || 'fit') !== 'fit' || Math.abs((photo.scale !== undefined ? photo.scale : 1) - 1) > 0.01 ||
+    Math.abs(photo.offsetX || 0) > 0.001 || Math.abs(photo.offsetY || 0) > 0.001;
+}
+window.photoHasAdjustments = photoHasAdjustments;
+
+// Aplica el modelo de ajuste a un <img> dentro de una caja (vista previa en la mesa y el modal)
+function applyPhotoLayoutToImg(img, photo, boxW, boxH) {
+  const run = () => {
+    const L = computePhotoLayout(photo, boxW, boxH, img.naturalWidth, img.naturalHeight);
+    img.style.maxWidth = 'none';
+    img.style.maxHeight = 'none';
+    img.style.objectFit = 'fill';
+    img.style.width = `${L.drawW}px`;
+    img.style.height = `${L.drawH}px`;
+    img.style.position = 'absolute';
+    img.style.left = `${(boxW - L.drawW) / 2}px`;
+    img.style.top = `${(boxH - L.drawH) / 2}px`;
+    img.style.transformOrigin = 'center center';
+    img.style.transform = `translate(${L.tx}px, ${L.ty}px) rotate(${L.rot}deg) scale(${L.sx}, ${L.sy})`;
+  };
+  if (img.complete && img.naturalWidth) run(); else img.addEventListener('load', run, { once: true });
+}
+window.applyPhotoLayoutToImg = applyPhotoLayoutToImg;
+
+// Igual que applyPhotoLayoutToImg pero mide la caja en vivo (sirve aunque la vista esté oculta al renderizar)
+function layoutPhotoInBox(img, photo, box) {
+  const relayout = () => {
+    if (box.clientWidth > 0 && box.clientHeight > 0) applyPhotoLayoutToImg(img, photo, box.clientWidth, box.clientHeight);
+  };
+  relayout();
+  if (typeof ResizeObserver !== 'undefined') {
+    const ro = new ResizeObserver(relayout);
+    ro.observe(box);
+  }
+}
+window.layoutPhotoInBox = layoutPhotoInBox;
+
 async function prepareStampedImageBytes(photo) {
   return new Promise((resolve) => {
     let finished = false;
@@ -4520,18 +4754,13 @@ async function prepareStampedImageBytes(photo) {
       try {
         const naturalW = img.naturalWidth || 1200;
         const naturalH = img.naturalHeight || 900;
-        const rot = ((photo.rotation || 0) % 360 + 360) % 360;
-        const isSideways = (rot === 90 || rot === 270);
 
         const shouldStamp = (photo.source === 'camera') && (photo.hasWatermark === true) && (state.config.masterToggle === true);
-        const userScale = photo.scale !== undefined ? photo.scale : 1.0;
-        const hasZoomOrPan = (userScale > 1.05) || (Math.abs(photo.offsetX || 0) > 0.01) || (Math.abs(photo.offsetY || 0) > 0.01);
-        const mode = photo.fitMode || 'fit';
+        // RQ-19: con "tamaño uniforme" activo todas las fotos pasan por el mismo lienzo 4:3
+        const uniform = state.config.uniformPhotoSize !== false;
 
-        // REGLA FUNDAMENTAL:
-        // Si el usuario NO rotó la foto (rot === 0), NO tiene estampado, NO tiene zoom/paneo ni modo cover:
-        // Entregar DIRECTAMENTE los bytes originales sin ninguna alteración ni re-renderizado
-        if (rot === 0 && !hasZoomOrPan && mode === 'fit' && !shouldStamp) {
+        // Sin ajustes, sin estampado y sin tamaño uniforme: entregar los bytes originales intactos
+        if (!photoHasAdjustments(photo) && !shouldStamp && !uniform) {
           if (photo.url && photo.url.startsWith('data:')) {
             const rawBytes = dataUrlToUint8Array(photo.url);
             if (rawBytes) {
@@ -4560,39 +4789,10 @@ async function prepareStampedImageBytes(photo) {
           }
         }
 
-        // Si el usuario la rotó o ajustó encuadre/zoom:
-        // Marco de celda estándar técnico (4:3 = 1600x1200) para encaje exacto en cuadrícula Excel / Word sin distorsión
+        // Lienzo técnico 4:3 (1600×1200): mismo tamaño para todas las fotos del informe
         const canvasW = 1600;
         const canvasH = 1200;
-        const canvasAR = canvasW / canvasH;
-
-        const effW = isSideways ? naturalH : naturalW;
-        const effH = isSideways ? naturalW : naturalH;
-        const imgAR = effW / effH;
-
-        let targetW, targetH;
-        if (mode === 'fit' && !hasZoomOrPan) {
-          if (imgAR >= canvasAR) {
-            targetW = canvasW;
-            targetH = canvasW / imgAR;
-          } else {
-            targetH = canvasH;
-            targetW = canvasH * imgAR;
-          }
-        } else {
-          if (imgAR >= canvasAR) {
-            targetH = canvasH * userScale;
-            targetW = targetH * imgAR;
-          } else {
-            targetW = canvasW * userScale;
-            targetH = targetW / imgAR;
-          }
-        }
-
-        const drawW = isSideways ? targetH : targetW;
-        const drawH = isSideways ? targetW : targetH;
-        const shiftX = (photo.offsetX || 0) * canvasW;
-        const shiftY = (photo.offsetY || 0) * canvasH;
+        const L = computePhotoLayout(photo, canvasW, canvasH, naturalW, naturalH);
 
         const canvas = document.createElement('canvas');
         canvas.width = canvasW;
@@ -4604,11 +4804,12 @@ async function prepareStampedImageBytes(photo) {
         ctx.fillRect(0, 0, canvasW, canvasH);
 
         ctx.save();
-        ctx.translate(canvasW / 2 + shiftX, canvasH / 2 + shiftY);
-        ctx.rotate((rot * Math.PI) / 180);
+        ctx.translate(canvasW / 2 + L.tx, canvasH / 2 + L.ty);
+        ctx.rotate((L.rot * Math.PI) / 180);
+        ctx.scale(L.sx, L.sy);
 
         try {
-          ctx.drawImage(img, -drawW / 2, -drawH / 2, drawW, drawH);
+          ctx.drawImage(img, -L.drawW / 2, -L.drawH / 2, L.drawW, L.drawH);
         } catch (e) {
           console.warn('Error al dibujar imagen en canvas, usando fallback:', e);
           drawTechnicalFallback(ctx, canvas, photo);

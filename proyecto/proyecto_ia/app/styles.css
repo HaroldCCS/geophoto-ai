@@ -285,3 +285,24 @@ body {
 .object-cover { object-fit: cover; }
 .object-contain { object-fit: contain; }
 
+
+/* Botones de herramientas del modal de ajuste de foto */
+.crop-tool {
+  padding: 0.45rem 0.25rem;
+  border-radius: 0.5rem;
+  background: rgb(30 41 59);
+  color: rgb(203 213 225);
+  font-size: 10px;
+  font-weight: 600;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  cursor: pointer;
+  transition: background .15s, transform .1s;
+}
+.crop-tool:hover { background: rgb(51 65 85); }
+.crop-tool:active { transform: scale(.95); }
+.crop-tool i { font-size: 15px; pointer-events: none; }
+.crop-tool span { pointer-events: none; line-height: 1.1; text-align: center; }
+.crop-tool.is-active { background: rgb(51 65 85); box-shadow: inset 0 0 0 2px rgb(96 165 250); color: #fff; }

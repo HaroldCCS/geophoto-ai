@@ -124,8 +124,9 @@ async function testRotationAndFramingE2E() {
   }
   console.log('[OK] dataUrlToUint8Array entrega exactamente los mismos bytes binarios originales sin compresión ni rotación.');
 
-  // Verificar que prepareStampedImageBytes contenga la regla de bypass directo para rot === 0
-  if (!appJsCode.includes('rot === 0 && !hasZoomOrPan && mode === \'fit\' && !shouldStamp')) {
+  // Verificar que prepareStampedImageBytes conserve el bypass de bytes originales para fotos sin ajustes.
+  // Desde la v2 el bypass aplica cuando el usuario desactiva "tamaño uniforme" (RQ-19 lo activa por defecto).
+  if (!appJsCode.includes('!photoHasAdjustments(photo) && !shouldStamp && !uniform')) {
     throw new Error('FALLO CRÍTICO: Falta la regla de bypass directo para fotos no rotadas en prepareStampedImageBytes!');
   }
   console.log('[OK] prepareStampedImageBytes entrega bytes originales intactos cuando el usuario no rotó la imagen.');

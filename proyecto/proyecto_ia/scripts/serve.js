@@ -61,7 +61,7 @@ const server = http.createServer((req, res) => {
     const headers = {
       'Content-Type': contentType,
       'Access-Control-Allow-Origin': '*',
-      'Cache-Control': ext === '.html' || ext === '.js' ? 'no-cache' : 'public, max-age=3600'
+      'Cache-Control': 'no-cache'
     };
 
     // Service-Worker-Allowed header para sw.js
