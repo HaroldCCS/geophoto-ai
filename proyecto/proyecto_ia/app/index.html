@@ -635,6 +635,9 @@
             <button id="btn-toggle-multi-select" class="px-2.5 py-1 rounded bg-slate-800 border border-slate-700 text-slate-300 text-[11px] hover:text-white">
               <i class="ph-bold ph-check-square-offset"></i> Seleccionar
             </button>
+            <button type="button" onclick="AIExtract.extractAllPending()" class="px-2.5 py-1 rounded bg-violet-600/90 text-white text-[11px] font-bold hover:bg-violet-500" title="Leer fecha, coordenadas y lugar de las fotos con IA (OCR + EXIF)">
+              <i class="ph-bold ph-sparkle"></i> IA
+            </button>
             <button id="btn-add-more-photos" class="px-2.5 py-1 rounded bg-blue-600 text-white text-[11px] font-bold hover:bg-blue-500">
               <i class="ph-bold ph-plus"></i> Añadir
             </button>
@@ -654,6 +657,12 @@
           <span class="text-[10px] text-slate-400 bg-slate-900/80 border border-slate-800 px-2 py-0.5 rounded-full flex items-center gap-1 shrink-0">
             <i class="ph-bold ph-arrows-down-up text-blue-400 text-xs"></i> <span>Mover a P1, P2...</span>
           </span>
+        </div>
+
+        <!-- Progreso de la extracción con IA -->
+        <div id="ai-extract-status" class="hidden px-3 py-1.5 bg-violet-950/60 border-b border-violet-800/50 shrink-0" role="status" aria-live="polite">
+          <div class="flex items-center gap-2 text-[11px] text-violet-200"><i class="ph-bold ph-sparkle animate-pulse"></i><span data-text>IA leyendo fotos…</span></div>
+          <div class="h-1 mt-1 bg-violet-900 rounded"><div data-bar class="h-1 bg-violet-400 rounded transition-all" style="width:0%"></div></div>
         </div>
 
         <!-- Lienzo de Fotos (Grid con Drag & Drop) -->
@@ -774,8 +783,14 @@
         </button>
 
         <p class="text-[10px] text-center text-slate-400">
-          El archivo se descargará directamente en la carpeta de descargas de este dispositivo sin requerir cuentas de Google ni configuraciones externas.
+          Cada descarga queda guardada como una versión nueva del informe (1.0, 1.1, 2.0…). Si conectas Google Drive, también se sube a la carpeta del proyecto.
         </p>
+
+        <!-- Nube (Google Drive + Sheets) y su cola de sincronización: ver modules/cloud.js -->
+        <div id="report-cloud-panel"></div>
+
+        <!-- Historial de versiones del informe: ver modules/versions.js -->
+        <div id="report-history-panel"></div>
 
       </section>
 
@@ -1108,7 +1123,11 @@
 
   </div>
 
+  <script src="lib/tesseract/tesseract.min.js"></script>
+  <script src="modules/metadata-core.js"></script>
   <script src="app.js"></script>
   <script src="modules/projects.js"></script>
+  <script src="modules/ai-extract.js"></script>
+  <script src="modules/versions.js"></script>
 </body>
 </html>

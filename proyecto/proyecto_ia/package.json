@@ -1,0 +1,15 @@
+{
+  "name": "geophoto-ai",
+  "version": "2.0.0",
+  "private": true,
+  "description": "GeoPhoto AI: PWA de registro fotográfico con extracción de metadatos por IA",
+  "scripts": {
+    "start": "node scripts/serve.js",
+    "test": "node scripts/run_tests.js",
+    "eval": "node scripts/eval_extraccion.js"
+  },
+  "devDependencies": {
+    "jpeg-js": "^0.4.4",
+    "tesseract.js": "^5.1.1"
+  }
+}

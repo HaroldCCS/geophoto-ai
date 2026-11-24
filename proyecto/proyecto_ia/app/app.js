@@ -50,6 +50,7 @@ const state = {
     minScalePct: 50,
     maxScalePct: 250,
     uniformPhotoSize: true,
+    autoExtract: true, // IA: leer metadatos automáticamente al importar fotos
     userName: ''
   },
   template: {
@@ -769,6 +770,8 @@ function switchView(viewId) {
     updateCanvasGrid();
   } else if (viewId === 'view-export') {
     if (typeof updateDirectDownloadView === 'function') updateDirectDownloadView();
+    if (window.ReportVersions) ReportVersions.renderHistory();
+    if (window.Cloud) Cloud.renderPanel();
   }
 }
 window.switchView = switchView;
@@ -1953,6 +1956,15 @@ function takePhoto() {
     lon: state.config.lon
   };
 
+  // Metadatos de la captura en vivo: vienen directo de los sensores (no hace falta OCR)
+  newPhoto.meta = {
+    capturedAt: newPhoto.capturedAt.slice(0, 19),
+    lat: state.config.lat, lon: state.config.lon,
+    municipio: mun, departamento: dep, via: null,
+    sources: { date: 'sensor', gps: 'sensor', place: 'gps' },
+    confidence: { date: 1, gps: 0.9, place: 0.7, overall: 0.87 },
+    checks: {}, engine: 'sensores del dispositivo', extractedAt: new Date().toISOString()
+  };
   state.photos.push(newPhoto);
   const canvasCount = document.getElementById('canvas-badge-count');
   if (canvasCount) canvasCount.textContent = state.photos.length;
@@ -2036,6 +2048,8 @@ function handleGalleryImport(files) {
 
         showToast(`${fileList.length} fotos importadas tal cual fueron cargadas`, 'ph-image text-emerald-400');
         switchView('view-canvas');
+        // IA: extraer fecha, coordenadas y lugar de las fotos nuevas (OCR del sello + EXIF)
+        if (window.AIExtract && state.config.autoExtract !== false) AIExtract.enqueue(state.photos);
       }
     };
     reader.readAsDataURL(file);
@@ -3696,10 +3710,11 @@ function updateCanvasGrid() {
         ` : ''}
       </div>
 
-      <!-- Descripción y Coordenadas -->
+      <!-- Descripción y datos extraídos por IA -->
       <div class="text-[10px] text-slate-300 truncate" title="${photo.note || 'Sin descripción'}">
         ${photo.note || '<span class="text-slate-500 italic">Sin descripción</span>'}
       </div>
+      <div class="min-h-[14px] flex">${window.AIExtract ? AIExtract.cardChips(photo) : ''}</div>
 
       <!-- Barra de Acciones Rápidas (Rotar, Ajustar Tamaño, Mover a Hoja, Eliminar) -->
       <div class="flex items-center justify-between pt-1 border-t border-slate-700/60 text-slate-400">
@@ -3708,6 +3723,9 @@ function updateCanvasGrid() {
         </button>
         <button type="button" draggable="false" onclick="event.stopPropagation(); openCropModal(${globalIndex})" class="btn-crop p-1 hover:text-white rounded cursor-pointer" title="Ajustar tamaño y encuadre">
           <i class="ph-bold ph-crop text-sm pointer-events-none"></i>
+        </button>
+        <button type="button" draggable="false" onclick="event.stopPropagation(); AIExtract.openPanel(${globalIndex})" class="p-1 hover:text-violet-300 rounded text-violet-400/90 cursor-pointer" title="Datos extraídos por IA">
+          <i class="ph-bold ph-sparkle text-sm pointer-events-none"></i>
         </button>
         <button type="button" draggable="false" onclick="event.stopPropagation(); openMovePageModal(${globalIndex})" class="btn-move-page p-1 hover:text-blue-300 rounded text-slate-400 cursor-pointer" title="Mover a otra hoja">
           <i class="ph-bold ph-files text-sm pointer-events-none"></i>
@@ -5581,6 +5599,7 @@ async function injectPhotosIntoUserDocx(rawBuffer, processedImages, filename) {
   a.href = downloadUrl;
   const safeName = filename.toLowerCase().endsWith('.docx') ? filename : `${filename}.docx`;
   a.download = safeName;
+  if (typeof window !== 'undefined' && typeof window.onReportGenerated === 'function') window.onReportGenerated(finalBlob, safeName);
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
@@ -5701,6 +5720,7 @@ async function generateCleanDemoWordDocument(processedImages, filename) {
 
   const finalBlob = await Packer.toBlob(doc);
   const safeName = filename.toLowerCase().endsWith('.docx') ? filename : `${filename}.docx`;
+  if (typeof window !== 'undefined' && typeof window.onReportGenerated === 'function') window.onReportGenerated(finalBlob, safeName);
   if (triggerDownload) {
     const downloadUrl = URL.createObjectURL(finalBlob);
     const a = document.createElement('a');
@@ -5979,8 +5999,11 @@ async function injectPhotosIntoUserXlsx(rawBuffer, processedImages, filename, tr
         }
         const cellRef = `${metaColLetter}${metaRow}`;
         const pNote = imgItem.photo.note || `Registro Fotográfico #${i + 1}`;
-        const pCoords = imgItem.photo.coords || `${state.config.municipality || 'COLOMBIA'}, CTM12`;
-        const descText = `DESCRIPCIÓN: ${pNote} | COORDENADAS: ${pCoords} | FECHA: ${new Date().toLocaleDateString('es-CO')}`;
+        const pMeta = imgItem.photo.meta || null;
+        const pCoords = imgItem.photo.coords || (pMeta && pMeta.lat != null ? `${pMeta.lat.toFixed(6)}, ${pMeta.lon.toFixed(6)}` : `${state.config.municipality || 'COLOMBIA'}, CTM12`);
+        // Fecha real de captura (EXIF/OCR) si la IA la extrajo; si no, la fecha de generación
+        const pDate = pMeta && pMeta.capturedAt && window.MetadataCore ? MetadataCore.formatDateEs(pMeta.capturedAt) : new Date().toLocaleDateString('es-CO');
+        const descText = `DESCRIPCIÓN: ${pNote} | COORDENADAS: ${pCoords} | FECHA: ${pDate}`;
         const safeText = descText.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         const cellRegex = new RegExp(`<c r="${cellRef}"[^>]*>[\\s\\S]*?<\\/c>`);
         if (s1Xml.match(cellRegex)) {
@@ -6026,6 +6049,7 @@ async function injectPhotosIntoUserXlsx(rawBuffer, processedImages, filename, tr
     });
 
     const safeName = filename.toLowerCase().endsWith('.xlsx') ? filename : `${filename}.xlsx`;
+    if (typeof window !== 'undefined' && typeof window.onReportGenerated === 'function') window.onReportGenerated(finalBlob, safeName);
     if (triggerDownload) {
       const downloadUrl = URL.createObjectURL(finalBlob);
       const a = document.createElement('a');
@@ -6197,6 +6221,7 @@ async function generateCleanDemoExcelDocument(processedImages, filename, trigger
     });
 
     const safeName = filename.toLowerCase().endsWith('.xlsx') ? filename : `${filename}.xlsx`;
+    if (typeof window !== 'undefined' && typeof window.onReportGenerated === 'function') window.onReportGenerated(finalBlob, safeName);
     if (triggerDownload) {
       const downloadUrl = URL.createObjectURL(finalBlob);
       const a = document.createElement('a');

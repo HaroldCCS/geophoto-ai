@@ -18,3 +18,5 @@ proyecto/proyecto_ia/GeoPhotoAI.exe
 # Node
 node_modules/
 proyecto/proyecto_ia/app/__test__/
+proyecto/proyecto_ia/eval/.cache/
+proyecto/proyecto_ia/eval/eval_log.txt
