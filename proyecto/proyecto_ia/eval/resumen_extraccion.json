@@ -1,0 +1,35 @@
+{
+  "fecha_evaluacion": "2026-11-24T00:45:12.041Z",
+  "fotos": 303,
+  "puntos": 19,
+  "con_exif_fecha": 303,
+  "con_exif_gps": 295,
+  "precision_fecha_ocr": {
+    "n": 303,
+    "aciertos": 222,
+    "tasa": 73.3
+  },
+  "precision_gps_ocr": {
+    "n": 295,
+    "aciertos": 205,
+    "tasa": 69.5
+  },
+  "lectura_lugar": {
+    "n": 303,
+    "aciertos": 275,
+    "tasa": 90.8
+  },
+  "lectura_departamento": {
+    "n": 303,
+    "aciertos": 231,
+    "tasa": 76.2
+  },
+  "tiempo_medio_ms": 2318,
+  "tiempo_mediana_ms": 678,
+  "tiempo_total_s": 703,
+  "tolerancias": {
+    "fecha_s": 120,
+    "gps_m": 30
+  },
+  "motor": "tesseract.js 5 (eng LSTM best_int) + binarización por umbral + parser propio"
+}

@@ -21,6 +21,7 @@ Vault del proyecto de grado de la Especialización en IA: **prototipo de app mó
 - [[Estado actual]]: qué funciona de verdad, qué estaba simulado
 - [[Mapa del codigo]]: dónde vive cada módulo en `app.js`
 - [[Como ejecutar]]: arrancar, probar, empaquetar
+- [[Evaluacion IA]]: precisión de la extracción sobre 303 fotos reales
 
 ### 02 · Requisitos
 - [[Requisitos del cliente]]: guardado en Drive/Sheets, versiones, mesa de ajuste (checklist)

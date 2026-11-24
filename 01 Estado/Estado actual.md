@@ -18,7 +18,7 @@ version_app: 2.0
 | Cámara en vivo | #estado/hecho | Ahora captura el cuadro real del video; los metadatos salen de los sensores. *No verificado en un teléfono físico.* |
 | Estampado tipo TimeMark | #estado/hecho | Sin cambios; se aplica a fotos tomadas con la cámara de la app. |
 | Importar desde galería | #estado/hecho | Guarda el nombre de archivo y lanza la extracción con IA. |
-| **IA: extracción de metadatos (OE1/OE2)** | #estado/hecho | EXIF + OCR del sello (Tesseract.js local) → fecha, coordenadas, vía, municipio y departamento, con confianza y verificación cruzada. Precisión medida en [[Evaluacion IA]]. |
+| **IA: extracción de metadatos (OE1/OE2)** | #estado/hecho | EXIF + OCR del sello (Tesseract.js local) → fecha, coordenadas, vía, municipio y departamento. Sobre 303 fotos: OCR solo 73 % fecha, 70 % GPS, 91 % lugar; con fusión EXIF 100 % fecha y 98 % GPS. Ver [[Evaluacion IA]]. |
 | Pies de foto automáticos | #estado/parcial | Descripción y coordenadas se llenan solas; el Excel usa la fecha real de captura. La plantilla Word no tiene celdas de pie de foto: allí solo van las imágenes. |
 | Plantillas .docx/.xlsx | #estado/hecho | Heurística OpenXML (sin modelo entrenado; la animación "IA" de plantillas sigue siendo cosmética). |
 | Mesa: ajuste (RQ-08…16, RQ-22) | #estado/hecho | Zoom, rotación libre, 90/180/270, espejo H/V, cuadrícula, auto-ajuste, llenar, bloqueo de proporciones, tamaño mín./máx., restablecer, guardar, aplicar a la página. Vista previa = exportación. |
