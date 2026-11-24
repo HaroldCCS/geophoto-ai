@@ -23,8 +23,8 @@ Cruce de [[Requisitos del cliente]] y [[Propuesta academica]] contra [[Estado ac
 | RQ-17 Organizar entre hojas | Hecho | — | ✔ | ✅ |
 | RQ-19 Tamaño uniforme | Hecho en fotos editadas | Aplicarlo a todas las fotos | F2 | ✅ |
 | RQ-05 Versionado de informes | — | v1.0 / 1.1 / 2.0 automático, historial local, descarga de versiones previas | F4 | ✅ |
-| RQ-01…04 Drive + Sheets | Simulado | OAuth, carpeta por proyecto (nueva o existente), subir fotos e informes, hoja con Proyectos / Versiones / Fotos | F5 | ✅ probado con API simulada; falta cuenta real |
-| RQ-07 Subida diferida offline | Simulado en memoria | Cola persistente en IndexedDB que se procesa al reconectar | F5 | ✅ probado con API simulada; falta cuenta real |
+| RQ-01…04 Drive + Sheets | Simulado | OAuth, carpeta por proyecto (nueva o existente), subir fotos e informes, hoja con Proyectos / Versiones / Fotos | F5 | ✅ probado con cuenta real |
+| RQ-07 Subida diferida offline | Simulado en memoria | Cola persistente en IndexedDB que se procesa al reconectar | F5 | ✅ probado con cuenta real |
 | OE3 Validación (precisión y tiempo) | — | Script de evaluación de la extracción contra las fotos BUPA | F6 | ✅ precisión medida; falta medir tiempo con usuario |
 | Exportar PDF, compartir | — | Fuera del alcance de esta iteración | Futuro | Pendiente |
 | Clasificación de escena (vivienda, cerca, vía…) | — | Modelo de visión (p. ej. MobileNet/ONNX); trabajo futuro | Futuro | Pendiente |

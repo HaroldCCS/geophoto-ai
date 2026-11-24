@@ -25,7 +25,7 @@ version_app: 2.0
 | Tamaño uniforme (RQ-19) | #estado/hecho | Todas las fotos se exportan a 1600×1200 (desactivable). |
 | Selección múltiple (RQ-23) | #estado/hecho | Retirar (solo de la app) y mover a otra página. |
 | Versionado de informes (RQ-05) | #estado/hecho | 1.0 → 1.1 (ajustes) → 2.0 (cambian fotos o plantilla); historial con re-descarga. |
-| Google Drive + Sheets (RQ-01…04) | #estado/parcial | Implementado y probado contra una API simulada. **Falta probar con una cuenta real** (requiere Client ID). |
+| Google Drive + Sheets (RQ-01…04) | #estado/hecho | Probado con la cuenta real harold@haroldsoftware.com: carpeta del proyecto, 3 fotos, informe v1.0 y la hoja con las pestañas Proyectos, Versiones y Fotos. |
 | Cola offline (RQ-07) | #estado/hecho | Persistente en IndexedDB; se procesa al reconectar o al conectar la cuenta. |
 | Exportar PDF / compartir | #estado/falta | |
 | Paquete portable `.exe` | #estado/hecho | Se compila en GitHub Actions (Windows) con prueba de humo automática. Ver [[Como ejecutar]]. |

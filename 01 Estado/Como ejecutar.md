@@ -44,6 +44,16 @@ npm run eval
 Lee todas las fotos `proyecto/BUPA-*` y compara lo que el OCR lee en el sello contra el EXIF. Deja `eval/resultados_extraccion.csv` y `eval/resumen_extraccion.json`. Resultados en [[Evaluacion IA]].
 
 ## Google Drive y Sheets (configuración única)
+
+> [!success] Ya configurado (23-nov-2026)
+> - Proyecto de Google Cloud: **`geophoto-ai`** (organización haroldsoftware.com, cuenta de facturación "Facturación Personal"; Drive y Sheets no tienen costo).
+> - APIs habilitadas: Google Drive API, Google Sheets API.
+> - Pantalla de consentimiento: **Externa, en modo prueba**. Usuarios de prueba: harold@haroldsoftware.com y omaredisson1013@gmail.com (máximo 100).
+> - Client ID web "GeoPhoto AI web": `852975462860-430i7dts6blks0lrurdvn14or797adrb.apps.googleusercontent.com`, con orígenes `http://localhost:8080` y `http://127.0.0.1:8080`.
+> - La app no usa el *client secret*: no hace falta guardarlo.
+> - Para que alguien más se conecte: agregarlo en *Google Auth Platform → Público → Usuarios de prueba*.
+
+Pasos para repetir la configuración desde cero:
 1. <https://console.cloud.google.com> → crear proyecto.
 2. *APIs y servicios → Biblioteca*: habilitar **Google Drive API** y **Google Sheets API**.
 3. *Pantalla de consentimiento OAuth*: tipo Externo; agregar tu correo como usuario de prueba.
