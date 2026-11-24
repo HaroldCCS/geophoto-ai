@@ -12,12 +12,8 @@ const DEFAULT_LOGO_DATA_URL = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3
 const state = {
   activeView: 'view-camera',
   isOnline: true,
-  currentProject: {
-    id: 'PRJ-2026-001',
-    name: 'Obra Subestación Sur',
-    code: 'CT-24',
-    client: 'Interconexión Eléctrica'
-  },
+  // Proyecto activo. Valor provisional hasta que loadOfflineState() abre el proyecto guardado (ver modules/projects.js)
+  currentProject: { id: '', name: 'Proyecto nuevo', code: 'PROY', client: '', status: 'Borrador' },
   config: {
     masterToggle: true,
     showDate: true,
@@ -57,104 +53,7 @@ const state = {
     hasHeaderLogo: true,
     preExistingPhotosCount: 2
   },
-  photos: [
-    {
-      id: 'FOTO-001',
-      title: 'Foto #1',
-      note: '',
-      url: 'https://images.unsplash.com/photo-1541888946425-d0fbb1861564?auto=format&fit=crop&w=600&q=80',
-      rotation: 0,
-      scale: 1.0,
-      fitMode: 'fit',
-      offsetX: 0,
-      offsetY: 0,
-      isPreExisting: true,
-      coords: '',
-      source: 'gallery',
-      isUserUploaded: true,
-      hasWatermark: false
-    },
-    {
-      id: 'FOTO-002',
-      title: 'Foto #2',
-      note: '',
-      url: 'https://images.unsplash.com/photo-1504307651254-35680f356dfd?auto=format&fit=crop&w=600&q=80',
-      rotation: 0,
-      scale: 1.0,
-      fitMode: 'fit',
-      offsetX: 0,
-      offsetY: 0,
-      isPreExisting: true,
-      coords: '',
-      source: 'gallery',
-      isUserUploaded: true,
-      hasWatermark: false
-    },
-    {
-      id: 'FOTO-003',
-      title: 'Foto #3',
-      note: '',
-      url: 'https://images.unsplash.com/photo-1581094794329-c8112a89af12?auto=format&fit=crop&w=600&q=80',
-      rotation: 0,
-      scale: 1.0,
-      fitMode: 'fit',
-      offsetX: 0,
-      offsetY: 0,
-      isPreExisting: false,
-      coords: '',
-      source: 'gallery',
-      isUserUploaded: true,
-      hasWatermark: false
-    },
-    {
-      id: 'FOTO-004',
-      title: 'Foto #4',
-      note: '',
-      url: 'https://images.unsplash.com/photo-1513694203232-719a280e022f?auto=format&fit=crop&w=600&q=80',
-      rotation: 0,
-      scale: 1.0,
-      fitMode: 'fit',
-      offsetX: 0,
-      offsetY: 0,
-      isPreExisting: false,
-      coords: '',
-      source: 'gallery',
-      isUserUploaded: true,
-      hasWatermark: false
-    },
-    {
-      id: 'FOTO-005',
-      title: 'Foto #5',
-      note: '',
-      url: 'https://images.unsplash.com/photo-1590381105924-c72589b9ef3f?auto=format&fit=crop&w=600&q=80',
-      rotation: 0,
-      scale: 1.0,
-      fitMode: 'fit',
-      offsetX: 0,
-      offsetY: 0,
-      isPreExisting: false,
-      coords: '',
-      source: 'gallery',
-      isUserUploaded: true,
-      hasWatermark: false
-    },
-    {
-      id: 'FOTO-006',
-      title: 'Foto #6',
-      note: '',
-      url: 'https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=600&q=80',
-      rotation: 0,
-      scale: 1.0,
-      fitMode: 'fit',
-      offsetX: 0,
-      offsetY: 0,
-      isPreExisting: false,
-      coords: '',
-      source: 'gallery',
-      isUserUploaded: true,
-      hasWatermark: false
-    }
-  ],
+  photos: [], // Sin fotos demo de internet: cada proyecto arranca vacío
   currentPage: 1,
   selectedPhotoIds: new Set(),
   isMultiSelectMode: false,
@@ -187,7 +86,43 @@ window.getActiveExtension = getActiveExtension;
 // PERSISTENCIA OFFLINE (INDEXEDDB - OFFLINESTORE)
 // ==========================================
 const DB_NAME = 'GeoPhotoAI_OfflineDB';
-const DB_VERSION = 1;
+// v2: almacenes por proyecto (projects), historial de informes (reports) y cola de nube (sync_queue)
+const DB_VERSION = 2;
+
+function idbRequest(req) {
+  return new Promise((resolve, reject) => {
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+function idbTxDone(tx) {
+  return new Promise((resolve, reject) => {
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(tx.error);
+  });
+}
+
+// Copia serializable de la plantilla activa (sin funciones ni referencias DOM)
+function serializeTemplate(template) {
+  if (!template) return null;
+  return {
+    metadata: {
+      name: template.name,
+      type: template.type,
+      uploadedFormat: template.uploadedFormat,
+      isInvias: !!template.isInvias,
+      slotsPerPage: template.slotsPerPage,
+      hasHeaderLogo: template.hasHeaderLogo,
+      tablesCount: template.tablesCount,
+      documentTitle: template.documentTitle,
+      preExistingPhotosCount: template.preExistingPhotosCount,
+      hasUserTemplate: !!template.hasUserTemplate
+    },
+    rawBuffer: template.rawBuffer || null
+  };
+}
 
 const OfflineStore = {
   db: null,
@@ -204,15 +139,17 @@ const OfflineStore = {
         const request = indexedDB.open(DB_NAME, DB_VERSION);
         request.onupgradeneeded = (e) => {
           const db = e.target.result;
-          if (!db.objectStoreNames.contains('app_state')) {
-            db.createObjectStore('app_state', { keyPath: 'key' });
+          // Almacenes v1 (se conservan para migrar datos antiguos)
+          if (!db.objectStoreNames.contains('app_state')) db.createObjectStore('app_state', { keyPath: 'key' });
+          if (!db.objectStoreNames.contains('photos')) db.createObjectStore('photos', { keyPath: 'id' });
+          if (!db.objectStoreNames.contains('template_data')) db.createObjectStore('template_data', { keyPath: 'id' });
+          // Almacenes v2
+          if (!db.objectStoreNames.contains('projects')) db.createObjectStore('projects', { keyPath: 'id' });
+          if (!db.objectStoreNames.contains('reports')) {
+            const rs = db.createObjectStore('reports', { keyPath: 'id' });
+            rs.createIndex('projectId', 'projectId', { unique: false });
           }
-          if (!db.objectStoreNames.contains('photos')) {
-            db.createObjectStore('photos', { keyPath: 'id' });
-          }
-          if (!db.objectStoreNames.contains('template_data')) {
-            db.createObjectStore('template_data', { keyPath: 'id' });
-          }
+          if (!db.objectStoreNames.contains('sync_queue')) db.createObjectStore('sync_queue', { keyPath: 'id', autoIncrement: true });
         };
         request.onsuccess = (e) => {
           this.db = e.target.result;
@@ -229,83 +166,166 @@ const OfflineStore = {
     });
   },
 
+  // Guarda la configuración global y el proyecto activo completo (metadatos, fotos y plantilla)
   async saveState(currentState) {
     try {
       const db = await this.open();
       if (!db) return;
-
-      const tx = db.transaction(['app_state', 'photos', 'template_data'], 'readwrite');
-      
-      // 1. Guardar config y proyecto
+      const project = currentState.currentProject;
+      const tx = db.transaction(['app_state', 'projects'], 'readwrite');
       const stateStore = tx.objectStore('app_state');
       stateStore.put({ key: 'config', value: currentState.config });
-      stateStore.put({ key: 'currentProject', value: currentState.currentProject });
-      stateStore.put({ key: 'currentPage', value: currentState.currentPage });
-
-      // 2. Guardar fotos actuales
-      const photosStore = tx.objectStore('photos');
-      photosStore.clear();
-      (currentState.photos || []).forEach(photo => {
-        photosStore.put(photo);
-      });
-
-      // 3. Guardar plantilla y su rawBuffer binario si existe
-      const templateStore = tx.objectStore('template_data');
-      if (currentState.template) {
-        templateStore.put({
-          id: 'active_template',
-          metadata: {
-            name: currentState.template.name,
-            type: currentState.template.type,
-            slotsPerPage: currentState.template.slotsPerPage,
-            hasHeaderLogo: currentState.template.hasHeaderLogo,
-            tablesCount: currentState.template.tablesCount,
-            documentTitle: currentState.template.documentTitle,
-            preExistingPhotosCount: currentState.template.preExistingPhotosCount,
-            hasUserTemplate: !!currentState.template.hasUserTemplate
-          },
-          rawBuffer: currentState.template.rawBuffer || null
+      if (project && project.id) {
+        stateStore.put({ key: 'activeProjectId', value: project.id });
+        project.updatedAt = new Date().toISOString();
+        if (project.status === 'Borrador' && (currentState.photos || []).length > 0) project.status = 'En proceso';
+        tx.objectStore('projects').put({
+          id: project.id,
+          meta: { ...project },
+          photos: currentState.photos || [],
+          template: serializeTemplate(currentState.template),
+          currentPage: currentState.currentPage || 1
         });
       }
-
-      await new Promise((res, rej) => {
-        tx.oncomplete = () => res();
-        tx.onerror = () => rej(tx.error);
-      });
+      await idbTxDone(tx);
     } catch (err) {
       console.warn('[OfflineStore] Error guardando estado offline:', err);
     }
   },
 
+  // Devuelve { config, activeProjectId, legacy } — legacy trae datos v1 para migrarlos
   async loadState() {
     try {
       const db = await this.open();
       if (!db) return null;
-
       const tx = db.transaction(['app_state', 'photos', 'template_data'], 'readonly');
-      
-      const configReq = tx.objectStore('app_state').get('config');
-      const projectReq = tx.objectStore('app_state').get('currentProject');
-      const photosReq = tx.objectStore('photos').getAll();
-      const templateReq = tx.objectStore('template_data').get('active_template');
-
-      const [configRes, projectRes, photosRes, templateRes] = await Promise.all([
-        new Promise(r => configReq.onsuccess = () => r(configReq.result)),
-        new Promise(r => projectReq.onsuccess = () => r(projectReq.result)),
-        new Promise(r => photosReq.onsuccess = () => r(photosReq.result)),
-        new Promise(r => templateReq.onsuccess = () => r(templateReq.result))
+      const [configRes, activeRes, legacyProject, legacyPhotos, legacyTemplate] = await Promise.all([
+        idbRequest(tx.objectStore('app_state').get('config')),
+        idbRequest(tx.objectStore('app_state').get('activeProjectId')),
+        idbRequest(tx.objectStore('app_state').get('currentProject')),
+        idbRequest(tx.objectStore('photos').getAll()),
+        idbRequest(tx.objectStore('template_data').get('active_template'))
       ]);
-
       return {
         config: configRes?.value || null,
-        currentProject: projectRes?.value || null,
-        photos: photosRes && photosRes.length > 0 ? photosRes : null,
-        template: templateRes || null
+        activeProjectId: activeRes?.value || null,
+        legacy: (legacyPhotos && legacyPhotos.length) || legacyTemplate ? {
+          project: legacyProject?.value || null,
+          photos: (legacyPhotos || []).filter(p => !(p.url || '').includes('unsplash.com')),
+          template: legacyTemplate || null
+        } : null
       };
     } catch (err) {
       console.warn('[OfflineStore] Error cargando estado offline:', err);
       return null;
     }
+  },
+
+  async clearLegacy() {
+    const db = await this.open();
+    if (!db) return;
+    const tx = db.transaction(['photos', 'template_data', 'app_state'], 'readwrite');
+    tx.objectStore('photos').clear();
+    tx.objectStore('template_data').clear();
+    tx.objectStore('app_state').delete('currentProject');
+    await idbTxDone(tx);
+  },
+
+  // ---- Proyectos ----
+  async getProject(id) {
+    const db = await this.open();
+    if (!db) return null;
+    return idbRequest(db.transaction('projects').objectStore('projects').get(id));
+  },
+
+  async putProject(record) {
+    const db = await this.open();
+    if (!db) return;
+    const tx = db.transaction('projects', 'readwrite');
+    tx.objectStore('projects').put(record);
+    await idbTxDone(tx);
+  },
+
+  // Lista liviana: solo metadatos y conteo de fotos (recorre con cursor)
+  async listProjects() {
+    const db = await this.open();
+    if (!db) return [];
+    return new Promise((resolve, reject) => {
+      const out = [];
+      const req = db.transaction('projects').objectStore('projects').openCursor();
+      req.onsuccess = () => {
+        const cur = req.result;
+        if (!cur) { resolve(out.sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''))); return; }
+        out.push({ ...cur.value.meta, photoCount: (cur.value.photos || []).length });
+        cur.continue();
+      };
+      req.onerror = () => reject(req.error);
+    });
+  },
+
+  async deleteProject(id) {
+    const db = await this.open();
+    if (!db) return;
+    const reports = await this.listReports(id);
+    const tx = db.transaction(['projects', 'reports'], 'readwrite');
+    tx.objectStore('projects').delete(id);
+    reports.forEach(r => tx.objectStore('reports').delete(r.id));
+    await idbTxDone(tx);
+  },
+
+  // ---- Historial de informes (versiones) ----
+  async putReport(report) {
+    const db = await this.open();
+    if (!db) return;
+    const tx = db.transaction('reports', 'readwrite');
+    tx.objectStore('reports').put(report);
+    await idbTxDone(tx);
+  },
+
+  async listReports(projectId) {
+    const db = await this.open();
+    if (!db) return [];
+    const all = await idbRequest(db.transaction('reports').objectStore('reports').index('projectId').getAll(projectId));
+    return (all || []).sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || ''));
+  },
+
+  async getReport(id) {
+    const db = await this.open();
+    if (!db) return null;
+    return idbRequest(db.transaction('reports').objectStore('reports').get(id));
+  },
+
+  // ---- Cola de sincronización con la nube (persistente) ----
+  async enqueueSync(job) {
+    const db = await this.open();
+    if (!db) return null;
+    const tx = db.transaction('sync_queue', 'readwrite');
+    const req = tx.objectStore('sync_queue').add({ ...job, createdAt: new Date().toISOString(), attempts: 0 });
+    const id = await idbRequest(req);
+    await idbTxDone(tx);
+    return id;
+  },
+
+  async listSyncJobs() {
+    const db = await this.open();
+    if (!db) return [];
+    return idbRequest(db.transaction('sync_queue').objectStore('sync_queue').getAll());
+  },
+
+  async updateSyncJob(job) {
+    const db = await this.open();
+    if (!db) return;
+    const tx = db.transaction('sync_queue', 'readwrite');
+    tx.objectStore('sync_queue').put(job);
+    await idbTxDone(tx);
+  },
+
+  async removeSyncJob(id) {
+    const db = await this.open();
+    if (!db) return;
+    const tx = db.transaction('sync_queue', 'readwrite');
+    tx.objectStore('sync_queue').delete(id);
+    await idbTxDone(tx);
   }
 };
 
@@ -322,7 +342,10 @@ window.scheduleOfflineSave = scheduleOfflineSave;
 async function loadOfflineState() {
   try {
     const saved = await OfflineStore.loadState();
-    if (!saved) return;
+    if (!saved) {
+      if (typeof Projects !== 'undefined') await Projects.bootstrap(null);
+      return;
+    }
 
     if (saved.config) {
       Object.assign(state.config, saved.config);
@@ -420,32 +443,9 @@ async function loadOfflineState() {
       }
     }
 
-    if (saved.currentProject) {
-      Object.assign(state.currentProject, saved.currentProject);
-      const prjTitle = document.getElementById('header-project-name');
-      if (prjTitle) prjTitle.textContent = state.currentProject.name;
-    }
-
-    if (saved.template && saved.template.metadata) {
-      Object.assign(state.template, saved.template.metadata);
-      if (saved.template.rawBuffer) {
-        state.template.rawBuffer = saved.template.rawBuffer;
-        state.template.hasUserTemplate = true;
-      }
-      const headerPill = document.getElementById('header-template-name');
-      if (headerPill) {
-        headerPill.textContent = getActiveFormatType() === 'word' ? 'Word' : 'Excel';
-      }
-      if (typeof updateDirectDownloadView === 'function') updateDirectDownloadView();
-    }
-
-    if (saved.photos && saved.photos.length > 0) {
-      state.photos = saved.photos;
-      state.photos.forEach(p => { delete p.previewUrl; });
-      const countBadge = document.getElementById('canvas-badge-count');
-      if (countBadge) countBadge.textContent = state.photos.length;
-      updateCanvasGrid();
-      renderPagination();
+    // Abrir el proyecto activo (o migrar datos v1 / crear el primero). Ver modules/projects.js
+    if (typeof Projects !== 'undefined') {
+      await Projects.bootstrap(saved);
     }
   } catch (err) {
     console.warn('[OfflineStore] Error cargando datos guardados:', err);
@@ -1903,21 +1903,26 @@ function getFormattedCoordinates(format) {
 }
 
 function takePhoto() {
+  // Captura REAL del cuadro actual de la cámara (antes se usaba una foto de muestra aleatoria)
+  const videoElem = document.getElementById('camera-stream');
+  const hasLiveVideo = videoElem && videoElem.srcObject && videoElem.videoWidth > 0 && !videoElem.classList.contains('hidden');
+  if (!hasLiveVideo) {
+    showToast('Cámara no disponible en este dispositivo o sin permiso. Usa "Galería" para cargar fotos.', 'ph-camera-slash text-amber-400');
+    return;
+  }
   if (navigator.vibrate) navigator.vibrate(50);
 
-  const sampleImages = [
-    'https://images.unsplash.com/photo-1541888946425-d0fbb1861564?auto=format&fit=crop&w=600&q=80',
-    'https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=600&q=80',
-    'https://images.unsplash.com/photo-1504307651254-35680f356dfd?auto=format&fit=crop&w=600&q=80',
-    'https://images.unsplash.com/photo-1590381105924-c72589b9ef3f?auto=format&fit=crop&w=600&q=80'
-  ];
-  const chosenUrl = sampleImages[Math.floor(Math.random() * sampleImages.length)];
+  const frame = document.createElement('canvas');
+  frame.width = videoElem.videoWidth;
+  frame.height = videoElem.videoHeight;
+  frame.getContext('2d').drawImage(videoElem, 0, 0, frame.width, frame.height);
+  const chosenUrl = frame.toDataURL('image/jpeg', 0.92);
 
   const mun = state.config.municipality || 'Medellín';
   const dep = state.config.department || 'Antioquia';
 
   const newPhoto = {
-    id: `FOTO-${String(state.photos.length + 1).padStart(3, '0')}`,
+    id: newPhotoId(),
     title: `Foto #${state.photos.length + 1}`,
     note: state.config.activeNote,
     url: chosenUrl,
@@ -1936,7 +1941,10 @@ function takePhoto() {
     watermarkConfig: { ...state.config },
     source: 'camera',
     isUserUploaded: false,
-    hasWatermark: state.config.masterToggle // SÓLO si el usuario lo activó en la cámara
+    hasWatermark: state.config.masterToggle, // SÓLO si el usuario lo activó en la cámara
+    capturedAt: new Date().toISOString(),
+    lat: state.config.lat,
+    lon: state.config.lon
   };
 
   state.photos.push(newPhoto);
@@ -1947,6 +1955,12 @@ function takePhoto() {
   
   showToast(`Fotografía guardada con éxito (${newPhoto.title}) - ${mun}, ${dep}`, 'ph-camera text-blue-400');
 }
+
+// Identificador único de foto (evita choques tras eliminar y volver a cargar)
+function newPhotoId() {
+  return `FOTO-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+}
+window.newPhotoId = newPhotoId;
 
 // Helper para convertir DataURL a Uint8Array binario nativo sin alterar píxeles ni metadatos
 function dataUrlToUint8Array(dataUrl) {
@@ -1984,9 +1998,10 @@ function handleGalleryImport(files) {
     reader.onload = (e) => {
       // REGLA FUNDAMENTAL: Guardar el archivo ORIGINAL TAL CUAL sin reorientación automática
       const newPhoto = {
-        id: `FOTO-${String(state.photos.length + 1).padStart(3, '0')}`,
+        id: newPhotoId(),
         title: `Foto #${state.photos.length + 1}`,
         note: '',
+        fileName: file.name,
         url: e.target.result, // ARCHIVO ORIGINAL SIN MANIPULACIÓN NI REORIENTACIÓN
         rotation: 0,          // Rotación inicial en 0 (sólo el usuario la rota)
         scale: 1.0,

@@ -17,3 +17,4 @@ proyecto/proyecto_ia/GeoPhotoAI.exe
 
 # Node
 node_modules/
+proyecto/proyecto_ia/app/__test__/

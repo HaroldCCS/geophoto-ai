@@ -60,7 +60,10 @@
     <header class="h-12 bg-slate-900/95 backdrop-blur border-b border-slate-800 px-3 flex items-center justify-between z-30 shrink-0">
       <div class="flex items-center space-x-2">
         <i class="ph-bold ph-aperture text-blue-500 text-xl"></i>
-        <span class="font-bold text-sm tracking-wide bg-gradient-to-r from-blue-400 to-indigo-300 bg-clip-text text-transparent">GeoPhoto AI</span>
+        <button type="button" onclick="Projects.open()" class="flex items-center gap-1 min-w-0 max-w-[150px] md:max-w-[220px] px-2 py-1 rounded-lg hover:bg-slate-800 border border-transparent hover:border-slate-700 transition" title="Proyecto activo: cambiar, crear o editar">
+          <span id="header-project-name" class="font-bold text-sm truncate bg-gradient-to-r from-blue-400 to-indigo-300 bg-clip-text text-transparent">GeoPhoto AI</span>
+          <i class="ph-bold ph-caret-down text-slate-400 text-xs shrink-0"></i>
+        </button>
         <!-- Botón para alternar modo escritorio (pantalla ancha vs marco móvil) -->
         <button id="btn-toggle-desktop-layout" onclick="toggleDesktopLayout()" class="hidden md:flex p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white text-xs items-center gap-1 cursor-pointer transition border border-slate-700" title="Alternar modo pantalla ancha / marco móvil">
           <i id="btn-toggle-layout-icon" class="ph-bold ph-arrows-out-simple"></i>
@@ -84,7 +87,6 @@
           <i class="ph-bold ph-file-doc text-indigo-400"></i>
           <span id="header-template-name">Formato: Word</span>
         </button>
-        <span id="header-project-name" class="hidden">Subestación Sur</span>
       </div>
     </header>
 
@@ -1109,5 +1111,6 @@
   </div>
 
   <script src="app.js"></script>
+  <script src="modules/projects.js"></script>
 </body>
 </html>

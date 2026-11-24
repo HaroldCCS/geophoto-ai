@@ -3,7 +3,7 @@
  * Soporte Offline Total para Web, Escritorio (Windows/Mac/Linux) y Móvil (Android/iOS)
  */
 
-const CACHE_VERSION = 'geophoto-v1.9.7';
+const CACHE_VERSION = 'geophoto-v2.0.0';
 const STATIC_CACHE = `geophoto-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `geophoto-runtime-${CACHE_VERSION}`;
 
@@ -13,6 +13,7 @@ const PRECACHE_URLS = [
   './index.html',
   './styles.css',
   './app.js',
+  './modules/projects.js',
   './manifest.json',
   './lib/tailwind.js',
   './lib/phosphor/style.css',
@@ -75,6 +76,11 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  // Nunca interceptar las APIs de Google (OAuth, Drive, Sheets): deben ir siempre a la red
+  if (/(^|\.)(googleapis\.com|google\.com|gstatic\.com|googleusercontent\.com)$/.test(url.hostname)) {
+    return;
+  }
+
   // A. Peticiones de navegación (Carga de la aplicación HTML)
   if (request.mode === 'navigate') {
     event.respondWith(
@@ -100,24 +106,13 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // B. Recursos estáticos locales (JS, CSS, Libs, Iconos): Cache-First con Stale-While-Revalidate
+  // B. Recursos estáticos locales (JS, CSS, Libs, Iconos): Network-First con respaldo en caché.
+  //    Con red siempre se sirve la versión más nueva (evita código viejo tras actualizar);
+  //    sin red se responde desde la caché precargada.
   const isLocalStatic = url.origin === self.location.origin;
   if (isLocalStatic) {
     event.respondWith(
       (async () => {
-        // Buscar en caché con tolerancia a parámetros de consulta (?v=...)
-        const cachedResponse = await caches.match(request, { ignoreSearch: true });
-        if (cachedResponse) {
-          // Actualizar caché en segundo plano si hay red disponible
-          fetch(request).then(async (networkResponse) => {
-            if (networkResponse && networkResponse.ok) {
-              const cache = await caches.open(STATIC_CACHE);
-              cache.put(request, networkResponse);
-            }
-          }).catch(() => {/* Modo offline silencioso */});
-          return cachedResponse;
-        }
-
         try {
           const networkResponse = await fetch(request);
           if (networkResponse && networkResponse.ok) {
@@ -126,6 +121,8 @@ self.addEventListener('fetch', (event) => {
           }
           return networkResponse;
         } catch (err) {
+          const cachedResponse = await caches.match(request, { ignoreSearch: true });
+          if (cachedResponse) return cachedResponse;
           // Si falló la red, intentar buscar por nombre de archivo relativo precacheado
           const filename = url.pathname.split('/').pop() || 'index.html';
           const relativeFallback = await caches.match('./' + filename, { ignoreSearch: true });
