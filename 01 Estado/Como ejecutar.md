@@ -53,5 +53,19 @@ Lee todas las fotos `proyecto/BUPA-*` y compara lo que el OCR lee en el sello co
 > [!warning] Permiso `drive` completo
 > La app pide el permiso `drive` completo para poder escribir en carpetas existentes que elija el usuario. Sirve para el prototipo en modo "prueba" (hasta 100 usuarios). Para publicar la app habría que pasar a `drive.file` + Google Picker o pasar la verificación de Google.
 
-## Empaquetado portable (Windows)
-`scripts/package_portable.ps1` genera `GeoPhotoAI_Portable/` y el `.zip`. Ambos están en `.gitignore`: se regeneran, no se versionan. **Están desactualizados** respecto al código actual: hay que regenerarlos en Windows.
+## Empaquetado portable (Windows) con GitHub Actions
+El `.exe` se compila en GitHub, en una máquina Windows (`.github/workflows/build-windows.yml`): compila `Launcher.cs` con el `csc.exe` de .NET Framework, hace una prueba de humo (abre el `.exe` y verifica que sirva la app en `127.0.0.1`) y arma `GeoPhotoAI_Portable.zip` con `scripts/package_portable.ps1`.
+
+- **Versión de prueba:** pestaña *Actions* → "Build Windows portable" → *Run workflow*. El `.zip` queda como artefacto durante 30 días. Desde la terminal:
+```bash
+gh workflow run build-windows.yml
+```
+- **Versión publicada:** crear una etiqueta; el `.zip` se adjunta a un *Release*.
+```bash
+git tag v2.1.0 && git push origin v2.1.0
+```
+
+Repositorio (privado): <https://github.com/HaroldCCS/geophoto-ai>. El `.exe` y el `.zip` no se versionan (`.gitignore`).
+
+> [!note] ¿Por qué no en local con `act`?
+> Se probó: `act` solo corre contenedores Linux o el propio Mac, no puede emular Windows, y la compilación necesita el `csc.exe` de Windows.

@@ -28,7 +28,7 @@ version_app: 2.0
 | Google Drive + Sheets (RQ-01…04) | #estado/parcial | Implementado y probado contra una API simulada. **Falta probar con una cuenta real** (requiere Client ID). |
 | Cola offline (RQ-07) | #estado/hecho | Persistente en IndexedDB; se procesa al reconectar o al conectar la cuenta. |
 | Exportar PDF / compartir | #estado/falta | |
-| Paquete portable `.exe` | #estado/parcial | El script existe pero el paquete actual está desactualizado: regenerarlo en Windows. |
+| Paquete portable `.exe` | #estado/hecho | Se compila en GitHub Actions (Windows) con prueba de humo automática. Ver [[Como ejecutar]]. |
 
 ## Errores corregidos en el código heredado
 - Exportar a Word **sin plantilla propia** (el caso por defecto) fallaba siempre con `triggerDownload is not defined`.
