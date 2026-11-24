@@ -742,7 +742,7 @@ function initNavigation() {
         showToast('Conectividad restablecida: procesando sincronizaciones pendientes', 'ph-wifi-high text-emerald-400');
         processSyncQueue();
       } else {
-        showToast('Modo Offline: las evidencias se guardarán localmente en SQLite e IndexedDB', 'ph-wifi-slash text-amber-400');
+        showToast('Modo Offline: todo se guarda en el dispositivo y se sube a Drive al reconectar', 'ph-wifi-slash text-amber-400');
       }
     });
   }
@@ -6246,10 +6246,9 @@ async function generateCleanDemoExcelDocument(processedImages, filename, trigger
 // ==========================================
 
 
+// Cola de sincronización con la nube: la procesa modules/cloud.js (persistente en IndexedDB)
 function processSyncQueue() {
-  if (state.syncQueue.length === 0) return;
-  const item = state.syncQueue.shift();
-  showToast(`Sincronización automática: ${item.filename} subido a ${item.provider}`, 'ph-cloud-check text-emerald-400');
+  if (window.Cloud) Cloud.processQueue();
 }
 
 // ==========================================

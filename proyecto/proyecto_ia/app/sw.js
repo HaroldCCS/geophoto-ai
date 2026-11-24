@@ -17,6 +17,7 @@ const PRECACHE_URLS = [
   './modules/metadata-core.js',
   './modules/ai-extract.js',
   './modules/versions.js',
+  './modules/cloud.js',
   './lib/tesseract/tesseract.min.js',
   './lib/tesseract/worker.min.js',
   './lib/tesseract/core/tesseract-core-simd-lstm.wasm.js',
